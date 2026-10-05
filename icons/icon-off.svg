@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- 止めているときの姿。動いているときと白黒をひっくり返す。明るい
+       ツールバーでは黒い塊、暗いツールバーでは白い枠として見える -->
+  <path d="M10 5h44a6 6 0 0 1 6 6v29a6 6 0 0 1-6 6H28L13 59l4-13h-7a6 6 0 0 1-6-6V11a6 6 0 0 1 6-6z"
+        fill="#101114" stroke="#FFFFFF" stroke-width="5" stroke-linejoin="round"/>
+  <text x="32" y="39" text-anchor="middle" fill="#FFFFFF"
+        font-family="Georgia,'Times New Roman',Times,serif" font-size="36">T</text>
+</svg>

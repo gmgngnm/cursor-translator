@@ -1,0 +1,132 @@
+/* 見た目は掲示板くらいの素っ気なさで足りる。角丸も影も動きも付けず、入力欄や
+   釦はブラウザの見た目のまま。設定画面と板で同じ一枚を使う。
+   明暗と色味は設定から。html の札（data-theme / data-accent）で切り替える */
+:root{
+  --bg:#EEF2FF; --box:#D6DAF0; --line:#B7C5D9; --field:#FFFFFF;
+  --ink:#000000; --soft:#707070;
+  --link:#34345C; --link-hover:#DD0000; --title:#0F0C5D;
+  --danger:#AF0A0F; --on:#2A4A8B; --off:#9AA3B8;
+}
+:root[data-accent="orange"]{
+  --bg:#FFFFEE; --box:#F0E0D6; --line:#D9BFB7;
+  --link:#800000; --title:#B02A1B; --on:#B0542A;
+}
+:root[data-accent="green"]{
+  --bg:#F0F5F0; --box:#D9EBDD; --line:#B3CDBA;
+  --link:#17603A; --title:#17603A; --on:#2A6B2A;
+}
+:root[data-accent="gray"]{
+  --bg:#F2F2F2; --box:#E4E4E4; --line:#BDBDBD;
+  --link:#3A3A3A; --title:#333333; --on:#555555;
+}
+
+/* 端末が暗いとき（設定が「明るい」でなければ従う） */
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#1D1F21; --box:#282A2E; --line:#3F4247; --field:#1D1F21;
+    --ink:#C5C8C6; --soft:#969896;
+    --link:#81A2BE; --link-hover:#5F89AC; --title:#81A2BE;
+    --danger:#CC6666; --on:#81A2BE; --off:#55585C;
+  }
+  :root:not([data-theme="light"])[data-accent="orange"]{--link:#DE935F; --title:#DE935F; --on:#DE935F;}
+  :root:not([data-theme="light"])[data-accent="green"]{--link:#B5BD68; --title:#B5BD68; --on:#B5BD68;}
+  :root:not([data-theme="light"])[data-accent="gray"]{--link:#C5C8C6; --title:#C5C8C6; --on:#8A8D8F;}
+}
+/* 設定で「暗い」を選んだとき */
+:root[data-theme="dark"]{
+  --bg:#1D1F21; --box:#282A2E; --line:#3F4247; --field:#1D1F21;
+  --ink:#C5C8C6; --soft:#969896;
+  --link:#81A2BE; --link-hover:#5F89AC; --title:#81A2BE;
+  --danger:#CC6666; --on:#81A2BE; --off:#55585C;
+}
+:root[data-theme="dark"][data-accent="orange"]{--link:#DE935F; --title:#DE935F; --on:#DE935F;}
+:root[data-theme="dark"][data-accent="green"]{--link:#B5BD68; --title:#B5BD68; --on:#B5BD68;}
+:root[data-theme="dark"][data-accent="gray"]{--link:#C5C8C6; --title:#C5C8C6; --on:#8A8D8F;}
+
+*{box-sizing:border-box;}
+body{
+  margin:0; padding:10px 12px 24px;
+  background:var(--bg); color:var(--ink);
+  font:13px/1.5 arial,helvetica,"Hiragino Kaku Gothic ProN","Yu Gothic","MS PGothic",sans-serif;
+}
+.wrap{max-width:620px;}
+h1{margin:0 0 1px; font-size:15px; color:var(--title);}
+.ver{color:var(--soft); font-size:11px; font-weight:normal;}
+.lead{margin:0 0 10px; color:var(--soft); font-size:11px;}
+a{color:var(--link);}
+a:hover{color:var(--link-hover);}
+hr{border:0; border-top:1px solid var(--line); margin:5px 0;}
+
+/* 入切の札。チェックの箱をそのまま横長の板にしている（別の要素を重ねると
+   キーボードや読み上げから外れるため） */
+input.sw{
+  appearance:none; -moz-appearance:none;
+  position:relative; vertical-align:middle;
+  width:30px; height:15px; margin:0; padding:0;
+  border:1px solid var(--line); background:var(--off);
+  cursor:pointer;
+}
+input.sw::after{
+  content:""; position:absolute; top:0; left:0;
+  width:12px; height:100%; background:var(--field);
+}
+input.sw:checked{background:var(--on); border-color:var(--on);}
+input.sw:checked::after{left:auto; right:0;}
+
+/* 吹き出しの見本。本物と同じ決め方で描く */
+.preview{
+  display:inline-block; padding:4px 8px 5px; box-sizing:border-box;
+  border:1px solid var(--line); border-radius:7px;
+  background:var(--box); color:var(--ink);
+  font-size:13px; line-height:1.5;
+}
+input[type="color"]{
+  width:46px; height:20px; padding:0; vertical-align:middle;
+  border:1px solid var(--line); background:var(--field); cursor:pointer;
+}
+
+/* 待機時間のバー。つまみの色だけ合わせて、あとはブラウザの見た目のまま */
+input.bar{width:100%; margin:2px 0 0; accent-color:var(--on); vertical-align:middle;}
+.val{color:var(--soft); font-weight:normal; font-size:11px;}
+td input.bar{width:60%;}
+td .val{margin-left:6px;}
+
+select,input[type="text"],input[type="password"]{
+  border:1px solid var(--line); background:var(--field); color:var(--ink);
+  font:inherit; font-size:12px; padding:1px 3px;
+}
+button{font:inherit; font-size:12px;}
+.gear{
+  float:right; padding:0; border:0; background:none;
+  color:var(--link); line-height:0; cursor:pointer;
+}
+.gear:hover{color:var(--link-hover);}
+
+/* 設定画面：左にラベル・右に操作の表 */
+.grp{
+  margin:10px 0 0; padding:2px 4px;
+  background:var(--box); border:1px solid var(--line); border-bottom:0;
+  color:var(--title); font-weight:bold; font-size:11px;
+}
+table{width:100%; border-collapse:collapse; border:1px solid var(--line);}
+td{padding:4px 5px; border-bottom:1px solid var(--line); font-size:12px; vertical-align:top;}
+tr:last-child td{border-bottom:0;}
+td.k{width:38%; color:var(--title);}
+tr[hidden]{display:none;}
+td .note{display:block; margin-top:2px; color:var(--soft); font-size:10px; line-height:1.4;}
+td input[type="text"],td input[type="password"]{width:78%;}
+.status{min-height:1.4em; margin:3px 0 0; color:var(--soft); font-size:11px; visibility:hidden;}
+.status.on{visibility:visible;}
+
+/* 板：ラベル左・操作右で一行ずつ */
+body.popup{width:230px; padding:8px;}
+body.popup h1{display:inline; font-size:13px;}
+.pop-head{margin-bottom:2px;}
+.prow{
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+  padding:3px 0; font-size:12px; cursor:pointer;
+}
+.prow select{cursor:pointer;}
+.note{color:var(--soft); font-size:10px;}
+.note.bad{color:var(--danger);}
+body.popup .note{display:block; margin:4px 0 0; line-height:1.4;}

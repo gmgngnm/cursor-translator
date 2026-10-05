@@ -1,0 +1,50 @@
+/* 自前のPDFビューア。Firefox の内蔵ビューアは resource:// のページなので、
+   拡張機能が中に入れない。訳を出すにも線を引くにも、自分のページで開くしかない */
+body.pdfpage{margin:0; padding:0; overflow:hidden; background:var(--box);}
+.pdfbar{
+  position:fixed; inset:0 0 auto 0; z-index:3;
+  display:flex; align-items:center; gap:8px;
+  padding:5px 8px;
+  background:var(--bg); border-bottom:1px solid var(--line);
+  font-size:12px;
+}
+.pdfbar b{color:var(--title);}
+.pdfname{flex:1; min-width:40px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--soft); font-size:11px;}
+.pdfmark{display:flex; align-items:center; gap:5px; cursor:pointer; white-space:nowrap;}
+.pdfzoom{display:flex; align-items:center; gap:4px;}
+.pdfzoom .val{min-width:3.4em; text-align:center;}
+#state{min-width:7em; color:var(--soft); font-weight:normal;}
+#state.dirty{color:var(--danger);}
+.pdfnote{
+  position:fixed; inset:31px 0 auto 0; z-index:3; margin:0;
+  padding:4px 8px; background:var(--box); border-bottom:1px solid var(--line);
+  color:var(--danger); font-size:11px;
+}
+.pdfnote:empty{display:none;}
+#viewerContainer{
+  position:absolute; inset:31px 0 0 0;
+  overflow:auto; background:var(--box);
+}
+/* pdf.js が描く紙。影は付けず、枠だけで区切る */
+.pdfViewer .page{border:1px solid var(--line); margin:8px auto; background:#fff;}
+
+/* 引いた線を重ねる層。紙（canvas）の上、字の層の下。
+   z-index は付けない。付けると層が独立してしまい、下の紙と混ざらなくなる
+   （蛍光ペンのつもりが、字を塗りつぶしてしまう） */
+.markLayer{position:absolute; inset:0; pointer-events:none;}
+.markLayer .mark{position:absolute; pointer-events:auto; cursor:pointer; mix-blend-mode:multiply;}
+.markLayer .mark.noted{border-bottom:2px solid rgba(0,0,0,.45);}
+
+.pdfeditor{
+  position:fixed; z-index:4;
+  width:240px; padding:6px;
+  background:var(--bg); border:1px solid var(--line);
+  font-size:12px;
+}
+.pdfeditor[hidden]{display:none;}
+.pdfeditor textarea{
+  width:100%; box-sizing:border-box; resize:vertical;
+  border:1px solid var(--line); background:var(--field); color:var(--ink);
+  font:inherit; font-size:12px;
+}
+.pdfeditor-row{display:flex; gap:6px; margin-top:5px;}

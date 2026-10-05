@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Cursor Translator — 設定</title>
+<link rel="stylesheet" href="options.css">
+</head>
+<body>
+<div class="wrap">
+  <h1>Cursor Translator <span class="ver" id="version"></span></h1>
+  <p class="lead">英文を選ぶか、英単語にカーソルを合わせると、その場に日本語訳が出ます。</p>
+
+  <div class="grp">動作</div>
+  <table>
+    <tr><td class="k"><label for="enabled">ハイライト翻訳</label></td>
+      <td><input type="checkbox" class="sw" id="enabled">
+        <span class="note">英文を選ぶと、その場で訳が出る。選ぶ手間がもう掛かっているので待たない</span></td></tr>
+    <tr><td class="k"><label for="hover">カーソルタッチ翻訳</label></td>
+      <td><input type="checkbox" class="sw" id="hover">
+        <span class="note">選ばなくても、英単語の上でカーソルを止めるとその語の意味が出る</span></td></tr>
+    <tr><td class="k"><label for="hover-delay">タッチ待機時間</label></td>
+      <td><input type="range" id="hover-delay" class="bar"> <b id="hover-delay-label" class="val"></b>
+        <span class="note">カーソルを止めてから訳しに行くまで。0〜5秒。短いほど早く出るが、読んでいるだけでも呼びやすくなる。ハイライト翻訳には掛からない</span></td></tr>
+    <tr><td class="k"><label for="trigger">選んだとき</label></td>
+      <td><select id="trigger">
+          <option value="auto">すぐ訳す</option>
+          <option value="button">「訳す」を押したときだけ</option>
+        </select></td></tr>
+  </table>
+
+  <div class="grp">翻訳</div>
+  <table>
+    <tr><td class="k"><label for="engine">使うもの</label></td>
+      <td><select id="engine"></select>
+        <span class="note">鍵はそれぞれ別に覚えているので、行き来しても入れ直しは要りません</span></td></tr>
+    <tr data-engine="gemini"><td class="k"><label for="api-key">APIキー</label></td>
+      <td><input id="api-key" type="password" placeholder="AIza..." autocomplete="off" spellcheck="false"><button class="peek" type="button" data-for="api-key">表示</button>
+        <span class="note"><a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">Google AI Studio</a> で作れます。この端末の中だけに保存され、訳す相手以外には送りません</span></td></tr>
+    <tr data-engine="gemini"><td class="k"><label for="model">モデル</label></td>
+      <td><input id="model" type="text" list="model-list" spellcheck="false" autocomplete="off">
+        <datalist id="model-list"></datalist>
+        <span class="note">迷ったらそのまま。キーを入れると使えるモデルが候補に出ます</span></td></tr>
+    <tr data-engine="deepl"><td class="k"><label for="deepl-key">APIキー</label></td>
+      <td><input id="deepl-key" type="password" placeholder="xxxxxxxx-...:fx" autocomplete="off" spellcheck="false"><button class="peek" type="button" data-for="deepl-key">表示</button>
+        <span class="note"><a href="https://www.deepl.com/pro-api" target="_blank" rel="noreferrer">DeepL API</a> の認証キー。末尾が <code>:fx</code> なら無料版の宛先へ送ります</span></td></tr>
+    <tr data-engine="google"><td class="k"><label for="google-key">APIキー</label></td>
+      <td><input id="google-key" type="password" placeholder="AIza..." autocomplete="off" spellcheck="false"><button class="peek" type="button" data-for="google-key">表示</button>
+        <span class="note">Cloud Translation API を有効にしてから、<a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer">認証情報</a> で作ったキー</span></td></tr>
+  </table>
+
+  <div class="grp">PDF</div>
+  <table>
+    <tr><td class="k"><label for="autosave">自動保存</label></td>
+      <td><select id="autosave"></select>
+        <span class="note">同梱のビューアでPDFに線を引いたとき、何秒ごとに勝手に保存するか。書き込んだ物は同じ名前で上書きします</span></td></tr>
+  </table>
+
+  <div class="grp">吹き出しの見た目</div>
+  <table>
+    <tr><td class="k">見え方</td>
+      <td><span id="bubble-preview" class="preview">図書館</span>
+        <span class="note">いまの決め方で出る吹き出し</span></td></tr>
+    <tr><td class="k"><label for="bubble-radius">角の丸み</label></td>
+      <td><input type="range" id="bubble-radius" class="bar" min="0" max="20" step="1"> <b id="bubble-radius-label" class="val"></b></td></tr>
+    <tr><td class="k"><label for="bubble-border">枠の太さ</label></td>
+      <td><input type="range" id="bubble-border" class="bar" min="0" max="5" step="1"> <b id="bubble-border-label" class="val"></b></td></tr>
+    <tr><td class="k"><label for="bubble-font">文字の大きさ</label></td>
+      <td><input type="range" id="bubble-font" class="bar" min="10" max="24" step="1"> <b id="bubble-font-label" class="val"></b></td></tr>
+    <tr><td class="k"><label for="bubble-width">大きさ（横幅の上限）</label></td>
+      <td><input type="range" id="bubble-width" class="bar" min="160" max="800" step="20"> <b id="bubble-width-label" class="val"></b>
+        <span class="note">訳が短ければ、この幅まで広がらずに縮む</span></td></tr>
+    <tr><td class="k"><label for="bubble-custom">色を自分で決める</label></td>
+      <td><input type="checkbox" class="sw" id="bubble-custom">
+        <span class="note">切っていれば、下の「色」で決めた色味に従う</span></td></tr>
+    <tr data-custom><td class="k"><label for="bubble-bg">背景色</label></td>
+      <td><input type="color" id="bubble-bg"></td></tr>
+    <tr data-custom><td class="k"><label for="bubble-line">枠の色</label></td>
+      <td><input type="color" id="bubble-line"></td></tr>
+    <tr data-custom><td class="k"><label for="bubble-ink">文字の色</label></td>
+      <td><input type="color" id="bubble-ink"></td></tr>
+  </table>
+
+  <div class="grp">見た目</div>
+  <table>
+    <tr><td class="k"><label for="theme">明るさ</label></td>
+      <td><select id="theme"></select></td></tr>
+    <tr><td class="k"><label for="accent">色</label></td>
+      <td><select id="accent"></select>
+        <span class="note">吹き出しと、この画面の色味</span></td></tr>
+  </table>
+
+  <p id="status" class="status" role="status" aria-live="polite"></p>
+</div>
+<script src="common.js"></script>
+<script src="options.js"></script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Cursor Translator — PDF</title>
+<link rel="stylesheet" href="../options.css">
+<link rel="stylesheet" href="vendor/pdf_viewer.css">
+<link rel="stylesheet" href="viewer.css">
+</head>
+<body class="pdfpage">
+<div class="pdfbar">
+  <b>Cursor Translator</b>
+  <button id="open" type="button">PDFを開く</button>
+  <input type="file" id="file" accept="application/pdf,.pdf" hidden>
+  <span id="name" class="pdfname"></span>
+
+  <label class="pdfmark" for="marker"><input type="checkbox" class="sw" id="marker"> マーカー</label>
+  <input type="color" id="color" value="#ffe066" title="マーカーの色">
+
+  <select id="page" title="ページ"></select>
+  <span class="pdfzoom">
+    <button id="out" type="button" title="小さく">−</button>
+    <b id="scale" class="val">—</b>
+    <button id="in" type="button" title="大きく">＋</button>
+  </span>
+
+  <button id="save" type="button">保存</button>
+  <b id="state" class="val"></b>
+</div>
+<p id="note" class="pdfnote"></p>
+
+<div id="viewerContainer"><div id="viewer" class="pdfViewer"></div></div>
+
+<!-- 線を引いたところを押すと出る、注釈の書き込み欄 -->
+<div id="editor" class="pdfeditor" hidden>
+  <textarea id="text" rows="3" placeholder="この線についての覚え書き"></textarea>
+  <div class="pdfeditor-row">
+    <button id="apply" type="button">付ける</button>
+    <button id="drop" type="button">線を消す</button>
+    <button id="close" type="button">閉じる</button>
+  </div>
+</div>
+
+<script src="../common.js"></script>
+<script src="viewer.js" type="module"></script>
+<script src="../content.js"></script>
+</body>
+</html>

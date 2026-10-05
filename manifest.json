@@ -1,0 +1,58 @@
+{
+  "manifest_version": 2,
+  "name": "Cursor Translator",
+  "version": "1.14.0",
+  "description": "ページの英文をマウスで選ぶと、その場に日本語訳を出す。訳は Gemini・DeepL・Google翻訳から選べる",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "select-to-ja@engoloyd",
+      "strict_min_version": "142.0",
+      "data_collection_permissions": {
+        "required": [
+          "websiteContent"
+        ]
+      }
+    }
+  },
+  "icons": {
+    "48": "icons/icon.svg",
+    "96": "icons/icon.svg"
+  },
+  "permissions": [
+    "storage",
+    "downloads",
+    "<all_urls>",
+    "https://generativelanguage.googleapis.com/*",
+    "https://api.deepl.com/*",
+    "https://api-free.deepl.com/*",
+    "https://translation.googleapis.com/*"
+  ],
+  "background": {
+    "scripts": [
+      "common.js",
+      "background.js"
+    ]
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "common.js",
+        "content.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
+  "browser_action": {
+    "default_icon": "icons/icon.svg",
+    "default_title": "Cursor Translator",
+    "default_popup": "popup.html"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  }
+}

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Cursor Translator</title>
+<link rel="stylesheet" href="options.css">
+</head>
+<body class="popup">
+<div class="pop-head">
+  <button id="gear" class="gear" type="button" title="くわしい設定" aria-label="くわしい設定">
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+  </button>
+  <h1>Cursor Translator <span class="ver" id="version"></span></h1>
+</div>
+<hr>
+
+<label class="prow" for="enabled"><span>ハイライト翻訳</span><input type="checkbox" class="sw" id="enabled"></label>
+<label class="prow" for="hover"><span>カーソルタッチ翻訳</span><input type="checkbox" class="sw" id="hover"></label>
+<label class="prow" for="hover-delay"><span>タッチ待機時間</span><b id="hover-delay-label" class="val"></b></label>
+<input type="range" id="hover-delay" class="bar">
+<hr>
+<label class="prow" for="engine"><span>翻訳</span><select id="engine"></select></label>
+<p id="key-note" class="note" role="status" aria-live="polite"></p>
+<hr>
+<button id="pdf" class="wide" type="button">PDFを開く</button>
+
+<script src="common.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>
