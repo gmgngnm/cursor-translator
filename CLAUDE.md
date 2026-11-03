@@ -41,8 +41,31 @@ npx web-ext run
 「直した」と言う前に、**変更前のコードで実際に症状が出ることを確かめる**。
 出ないなら、それは直した対象ではない。
 
-`web-ext lint` は `pdf/vendor/` に警告を出す（同梱した pdf.js のもの）。
-自分の分だけ見るときは `--ignore-files "pdf/vendor/**"` を付ける。
+`web-ext lint` には **`--self-hosted` を付ける**。付けないと `update_url` が
+「AMOが配る物には書けない」とエラーになる。こちらは自分で配る物なので、それで
+正しい。`pdf/vendor/` には同梱した pdf.js のぶんの警告が出るので、自分の分だけ
+見るときは `--ignore-files "pdf/vendor/**"` も付ける。
+
+```
+npx web-ext lint --self-hosted --ignore-files "pdf/vendor/**"
+```
+
+## 版を出す
+
+常設で入れられるのは Mozilla(AMO) が署名した物だけ。`about:debugging` から入る
+「一時的なアドオン」は閉じると消える。署名は unlisted（自分で配る）で取っていて、
+手順は `.github/workflows/release.yml` に入れてある。
+
+`manifest.json` の `version` を上げて push し、同じ版の札を打てば走る。
+
+```
+git tag v1.15.0 && git push origin v1.15.0
+```
+
+札と `manifest.json` の版が食い違っていると、そこで止まる（更新されない物が
+出来上がるのを防ぐため）。`manifest.json` の `update_url` は
+`releases/latest/download/updates.json` という札に依らない入り口を指しているので、
+ここを変えると**入れ直しが要る**。むやみに触らないこと。
 
 ## EnGoloyd との繋ぎ目
 
