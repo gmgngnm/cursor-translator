@@ -1,12 +1,13 @@
 {
   "manifest_version": 2,
   "name": "Cursor Translator",
-  "version": "1.14.0",
+  "version": "1.15.0",
   "description": "ページの英文をマウスで選ぶと、その場に日本語訳を出す。訳は Gemini・DeepL・Google翻訳から選べる",
   "browser_specific_settings": {
     "gecko": {
       "id": "select-to-ja@engoloyd",
       "strict_min_version": "142.0",
+      "update_url": "https://github.com/gmgngnm/cursor-translator/releases/latest/download/updates.json",
       "data_collection_permissions": {
         "required": [
           "websiteContent"

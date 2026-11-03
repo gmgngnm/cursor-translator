@@ -13,15 +13,26 @@ Firefox 142 以降（Android 版を含めた下限）。何を外に出すのか
 `data_collection_permissions`（選んだ本文を訳す相手へ送る、という申告）が
 そこから入ったため、下限をそこに合わせてある。
 
-## 入れ方（自分の Firefox で試す）
+## 入れ方
+
+**ずっと使うなら、署名した `.xpi` を入れる。**
+[リリース](https://github.com/gmgngnm/cursor-translator/releases/latest) から
+`cursor-translator-*.xpi` を落として Firefox で開けば、それで入る。一度入れれば
+**閉じても消えないし、新しい版が出れば Firefox が勝手に拾ってくる**。
+
+入れたら設定画面が自動で開くので、訳す相手を選んでAPIキーを入れる。閉じて
+しまっても、ツールバーのアイコン → 右上の歯車で開き直せる。
+
+リリースがまだ無い（または自分で作り直したい）ときは、下の
+「署名した版を作る」を見る。
+
+### 試すだけなら
 
 1. Firefox で `about:debugging#/runtime/this-firefox` を開く
 2. 「一時的なアドオンを読み込む…」を押し、このリポジトリ直下の `manifest.json` を選ぶ
-3. 読み込むと設定画面が自動で開くので、訳す相手を選んでAPIキーを入れる
-   （閉じてしまっても、ツールバーのアイコン → 右上の歯車で開き直せる）
 
-この入れ方だと Firefox を閉じるまでの命。ずっと使うなら次の「入れ直すのが面倒な
-とき」を見る。
+**この入れ方は Firefox を閉じるまでの命。** 署名が要らない代わりに、閉じると消える。
+直しながら試すとき用。
 
 ## 訳す相手とAPIキー
 
@@ -113,7 +124,7 @@ pdf.js の核（`pdf/vendor/`、2.8MB）と、書き込みに使う pdf-lib。CJ
 
 ## どの版が入っているか
 
-設定画面と板の見出しに `v1.14.0` のように出る。`about:addons` の「詳細」でも見られる。
+設定画面と板の見出しに `v1.15.0` のように出る。`about:addons` の「詳細」でも見られる。
 直したはずなのに変わらないときは、まずここが古いままになっていないか見る
 （`about:debugging` の「再読み込み」は、ディスク上のファイルを読み直すだけ）。
 
@@ -184,24 +195,65 @@ npx web-ext run
 専用の Firefox が立ち上がり、**ファイルを保存するたびに勝手に読み込み直す**。
 `about:debugging` を触らなくてよくなる。
 
-**2. 普段使いの Firefox に入れたままにするなら署名する**
+**2. 普段使いの Firefox に入れたままにするなら、署名した版を作る**
 
-AMO で「自分にだけ配る」署名（unlisted）を取れば、更新を自動で受け取れる。
+下の「署名した版を作る」。一度仕込めば、札（タグ）を打つだけで済む。
+
+## 署名した版を作る
+
+Firefox は**署名の無いアドオンを常設では入れさせない**。`about:debugging` から
+入れる「一時的なアドオン」だけが例外で、閉じると消える。常設にするには
+Mozilla(AMO) に署名してもらうしかない。
+
+AMO への載せ方は二つあり、ここでは **unlisted（自分で配る）** を使う。公開の
+審査を通さずに済み、出来上がった `.xpi` を自分で配って、更新も自分で知らせる。
+
+### 先に一度だけ要ること
+
+1. [配布契約](https://addons.mozilla.org/developers/) に同意する
+   （これを済ませないと次の鍵の画面が開かない）
+2. [APIキーの画面](https://addons.mozilla.org/developers/addon/api/key/) で鍵を作る。
+   **JWT issuer** と **JWT secret** の二つが出る
+3. このリポジトリの Settings → Secrets and variables → Actions に、その二つを
+   `AMO_JWT_ISSUER` と `AMO_JWT_SECRET` という名前で入れる
+
+### 新しい版を出す
 
 ```
-npx web-ext sign --channel unlisted \
-  --api-key "$AMO_JWT_ISSUER" --api-secret "$AMO_JWT_SECRET"
+# manifest.json の version を上げてから
+git tag v1.15.0 && git push origin v1.15.0
 ```
 
-（鍵は https://addons.mozilla.org/developers/addon/api/key/ で作る）
-出来上がった `.xpi` を GitHub Pages などに置き、`manifest.json` に
-`browser_specific_settings.gecko.update_url` を足して更新情報のJSONを指せば、
-以降は Firefox が自分で新しい版を拾いに行く。
+`.github/workflows/release.yml` が動き、
 
-**3. それまでの間**
+1. 札と `manifest.json` の版が合っているかを見る（食い違っていればここで止まる）
+2. AMO に送って署名してもらう
+3. 署名済みの `.xpi` と `updates.json` を、その札のリリースに貼る
 
-`git pull` して `about:debugging` の「再読み込み」を押すだけでよい。
-zip を落としてくる必要は無い。
+`manifest.json` の `update_url` は
+`releases/latest/download/updates.json` を指している。札ごとにURLが変わらない
+固定の入り口なので、入れ直しは要らない。Firefox はここをときどき見に行き、
+自分より新しい版があれば勝手に入れ替える。
+
+`updates.json` を書いているのは `tools/updates-json.mjs`。`.xpi` の sha256 も
+入れているので、取ってきた物が途中で化けていれば Firefox が気づく。
+
+### 手元で署名したいとき
+
+```
+WEB_EXT_API_KEY=... WEB_EXT_API_SECRET=... \
+  npx web-ext sign --channel unlisted
+```
+
+`web-ext-artifacts/` に署名済みの `.xpi` が落ちてくる。これを Firefox で開けば
+入る（この場合、更新は自分で入れ直すことになる）。
+
+### 署名を通さずに常設にしたいなら
+
+Firefox Developer Edition・Nightly・ESR なら `about:config` の
+`xpinstall.signatures.required` を `false` にすると、署名の無いアドオンも常設で
+入れられる。**普通の Firefox ではこの設定は効かない**（無視される）ので、
+その道を選ぶなら Firefox の方を入れ替えることになる。
 
 ## 中身
 
@@ -212,6 +264,9 @@ zip を落としてくる必要は無い。
 | `common.js` | 設定の既定値と、相手と鍵の対応表。4か所から同じ物を読むためのもの |
 | `popup.html/.js` | ツールバーの釦から出る板。入切・待機時間・相手・PDFを開く |
 | `pdf/viewer.html/.js/.css` | 同梱のPDFビューア。描くのは pdf.js、書き込むのは pdf-lib（どちらも `pdf/vendor/`） |
+| `tools/updates-json.mjs` | 自分で配る版の更新情報を書く。リリースのときだけ使う |
+| `.github/workflows/release.yml` | 札を打つと署名して、リリースに貼るところまでやる |
+| `web-ext-config.mjs` | 配る `.xpi` に入れない物（説明書や `tools/`）を外す |
 | `options.html/.js/.css` | 設定画面（板と同じ `options.css` を使う） |
 
 訳す相手を呼ぶのは裏方だけにしてある。ページ側から直に呼ぶと、ページごとの
@@ -248,6 +303,9 @@ v2 にしてある（Firefox は v2 を今も受け付ける）。v3 に移す�
 ## 直したら
 
 - `manifest.json` の `version` を上げる
+- `web-ext lint` には **`--self-hosted` を付ける**。付けないと `update_url` が
+  「AMOが配る物には書けない」と**エラー**になる。こちらは自分で配る物なので、
+  それで正しい
 - `web-ext lint` は `pdf/vendor/` に14件の警告を出す（`DANGEROUS_EVAL` など）。
   同梱した pdf.js のもので、こちらのコードからは0件。自分の分だけ見たいときは
   `--ignore-files "pdf/vendor/**"` を付ける
