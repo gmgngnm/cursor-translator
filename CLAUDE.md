@@ -56,14 +56,16 @@ npx web-ext lint --self-hosted --ignore-files "pdf/vendor/**"
 「一時的なアドオン」は閉じると消える。署名は unlisted（自分で配る）で取っていて、
 手順は `.github/workflows/release.yml` に入れてある。
 
-`manifest.json` の `version` を上げて push し、同じ版の札を打てば走る。
+`manifest.json` の `version` を上げたうえで、Actions → release → Run workflow を
+押すか、同じ版の札を打つ。
 
 ```
 git tag v1.15.0 && git push origin v1.15.0
 ```
 
-札と `manifest.json` の版が食い違っていると、そこで止まる（更新されない物が
-出来上がるのを防ぐため）。`manifest.json` の `update_url` は
+釦から出したときは `manifest.json` の版がそのまま札になる（同じ版がもう在れば
+止まる）。札から出したときは、札と `manifest.json` の版が食い違っていると止まる
+（どちらも、更新されない物が出来上がるのを防ぐため）。`manifest.json` の `update_url` は
 `releases/latest/download/updates.json` という札に依らない入り口を指しているので、
 ここを変えると**入れ直しが要る**。むやみに触らないこと。
 

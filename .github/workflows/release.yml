@@ -9,17 +9,20 @@
 # 先に一度だけ要るもの:
 #   - https://addons.mozilla.org/developers/addon/api/key/ で鍵を作る
 #     （先に配布契約への同意が要る）
-#   - このリポジトリの Settings → Secrets → Actions に
+#   - このリポジトリの Settings → Secrets and variables → Actions に
 #     AMO_JWT_ISSUER と AMO_JWT_SECRET を入れる
 #
-# 使い方: manifest.json の version を上げて push したあと
-#   git tag v1.15.0 && git push origin v1.15.0
+# 出し方は二つ。どちらでも同じ物が出来る。
+#   1. GitHub の Actions → release → Run workflow を押す。
+#      札は manifest.json の version から自分で付ける（git を触らなくてよい）
+#   2. 手元で札を打つ: git tag v1.15.0 && git push origin v1.15.0
 
 name: release
 
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -35,16 +38,32 @@ jobs:
           node-version: "22"
 
       # 札と manifest の版がずれていると、更新されない物が出来上がる。
-      # 直す手間の方が大きいので、ここで止める
-      - name: 札と manifest の版が合っているか
+      # あとから直す手間の方が大きいので、ここで止める
+      - name: 出す版を決める
         id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           version=$(node -p "require('./manifest.json').version")
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          if [ "${GITHUB_REF_NAME#v}" != "$version" ]; then
-            echo "札 ${GITHUB_REF_NAME} と manifest の $version が食い違っている" >&2
-            exit 1
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            # 札から来た場合は、その札が manifest と合っているかを見る
+            tag="$GITHUB_REF_NAME"
+            if [ "${tag#v}" != "$version" ]; then
+              echo "札 $tag と manifest の $version が食い違っている" >&2
+              echo "manifest.json の version を直すか、合う札を打ち直すこと" >&2
+              exit 1
+            fi
+          else
+            # 釦から来た場合は、manifest の版がそのまま札になる
+            tag="v$version"
+            if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+              echo "$tag はもう在る。manifest.json の version を上げること" >&2
+              exit 1
+            fi
           fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "出す版: $tag"
 
       # --self-hosted を付けないと update_url が「AMOが配る物には書けない」と
       # 怒られる。こちらは自分で配る物なので、それで正しい
@@ -61,20 +80,27 @@ jobs:
       - name: 名前を決め打ちにして、更新情報を書く
         id: build
         run: |
-          version="${{ steps.version.outputs.version }}"
-          xpi="cursor-translator-$version.xpi"
+          xpi="cursor-translator-${{ steps.version.outputs.version }}.xpi"
           mv "$(ls web-ext-artifacts/*.xpi | head -1)" "$xpi"
-          link="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${xpi}"
+          link="https://github.com/${GITHUB_REPOSITORY}/releases/download/${{ steps.version.outputs.tag }}/${xpi}"
           node tools/updates-json.mjs "$xpi" "$link" updates.json
           echo "xpi=$xpi" >> "$GITHUB_OUTPUT"
 
       # updates.json は releases/latest/download/ から引ける。manifest の
-      # update_url がその固定のURLを指しているので、札ごとにURLが変わらない
+      # update_url がその固定のURLを指しているので、札ごとにURLが変わらない。
+      # 先にリリースを作ってあった場合（GitHubの画面から作ると作られる）は、
+      # 作り直さずにそこへ貼る
       - name: リリースに貼る
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          XPI: ${{ steps.build.outputs.xpi }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            --title "$GITHUB_REF_NAME" \
-            --notes "Firefox に入れるには ${{ steps.build.outputs.xpi }} を開く。入れたあとは Firefox が自分で更新を拾う" \
-            "${{ steps.build.outputs.xpi }}" updates.json
+          notes="Firefox に入れるには $XPI を開く。入れたあとは Firefox が自分で更新を拾う"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$XPI" updates.json --clobber
+          else
+            gh release create "$TAG" --target "$GITHUB_SHA" \
+              --title "$TAG" --notes "$notes" "$XPI" updates.json
+          fi
+          echo "出来た: $(gh release view "$TAG" --json url -q .url)"
