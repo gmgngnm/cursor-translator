@@ -219,16 +219,28 @@ AMO への載せ方は二つあり、ここでは **unlisted（自分で配る�
 
 ### 新しい版を出す
 
+**GitHub の画面から釦を押すだけでよい。** git を触らなくても出せる。
+
+1. [Actions → release](https://github.com/gmgngnm/cursor-translator/actions/workflows/release.yml)
+   を開く
+2. 右の **Run workflow** → 枝は `main` のまま → **Run workflow**
+
+版（札）は `manifest.json` の `version` からそのまま付く。同じ版がもう出ていれば
+そこで止まるので、先に `version` を上げること。
+
+手元から打ってもよい。
+
 ```
 # manifest.json の version を上げてから
 git tag v1.15.0 && git push origin v1.15.0
 ```
 
-`.github/workflows/release.yml` が動き、
+どちらでも `.github/workflows/release.yml` が動き、
 
-1. 札と `manifest.json` の版が合っているかを見る（食い違っていればここで止まる）
+1. 出す版を決める（札から来たときは `manifest.json` と合っているかを見て、
+   食い違っていればここで止まる）
 2. AMO に送って署名してもらう
-3. 署名済みの `.xpi` と `updates.json` を、その札のリリースに貼る
+3. 署名済みの `.xpi` と `updates.json` を、その版のリリースに貼る
 
 `manifest.json` の `update_url` は
 `releases/latest/download/updates.json` を指している。札ごとにURLが変わらない
