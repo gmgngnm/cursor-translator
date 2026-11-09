@@ -12,20 +12,29 @@
 #   - このリポジトリの Settings → Secrets and variables → Actions に
 #     AMO_JWT_ISSUER と AMO_JWT_SECRET を入れる
 #
-# 出し方は二つ。どちらでも同じ物が出来る。
-#   1. GitHub の Actions → release → Run workflow を押す。
-#      札は manifest.json の version から自分で付ける（git を触らなくてよい）
-#   2. 手元で札を打つ: git tag v1.15.0 && git push origin v1.15.0
+# 出し方は三つ。どれでも同じ物が出来る。
+#   1. 何もしない。main の manifest.json の version が上がれば、それだけで出る
+#   2. GitHub の Actions → release → Run workflow を押す
+#   3. 手元で札を打つ: git tag v1.15.0 && git push origin v1.15.0
+#
+# 1 は「version が変わったときだけ」。説明書やこのファイルだけ直したときは、
+# その版がもう出ているので何も起きない（中身の変わらない版を署名して配らない）。
 
 name: release
 
 on:
   push:
+    branches: [main]
     tags: ["v*"]
   workflow_dispatch:
 
 permissions:
   contents: write
+
+# 続けて main に入ったとき、同じ版を二重に出しに行かないように
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   sign:
@@ -37,30 +46,37 @@ jobs:
         with:
           node-version: "22"
 
-      # 札と manifest の版がずれていると、更新されない物が出来上がる。
-      # あとから直す手間の方が大きいので、ここで止める
+      # どこから来たかで、札の決め方と「もう在る」ときの扱いが変わる。
+      # 札がずれた物を配ると更新されなくなるので、ずれは必ず止める
       - name: 出す版を決める
         id: version
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           version=$(node -p "require('./manifest.json').version")
-          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
-            # 札から来た場合は、その札が manifest と合っているかを見る
-            tag="$GITHUB_REF_NAME"
-            if [ "${tag#v}" != "$version" ]; then
-              echo "札 $tag と manifest の $version が食い違っている" >&2
-              echo "manifest.json の version を直すか、合う札を打ち直すこと" >&2
-              exit 1
-            fi
-          else
-            # 釦から来た場合は、manifest の版がそのまま札になる
-            tag="v$version"
-            if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
-              echo "$tag はもう在る。manifest.json の version を上げること" >&2
-              exit 1
-            fi
-          fi
+          tag="v$version"
+          case "$GITHUB_REF" in
+            refs/tags/*)
+              # 札から来た。その札が manifest と合っているか
+              tag="$GITHUB_REF_NAME"
+              if [ "${tag#v}" != "$version" ]; then
+                echo "札 $tag と manifest の $version が食い違っている" >&2
+                echo "manifest.json の version を直すか、合う札を打ち直すこと" >&2
+                exit 1
+              fi
+              ;;
+            *)
+              if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+                if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+                  # 釦を押したのに何も起きないのは分かりにくいので、理由を出して止める
+                  echo "$tag はもう出ている。manifest.json の version を上げること" >&2
+                  exit 1
+                fi
+                # main に入っただけ。版が変わっていないので、今回は出さない
+                echo "$tag はもう出ている。版が変わっていないので何もしない"
+                echo "skip=true" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              ;;
+          esac
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "出す版: $tag"
@@ -68,9 +84,11 @@ jobs:
       # --self-hosted を付けないと update_url が「AMOが配る物には書けない」と
       # 怒られる。こちらは自分で配る物なので、それで正しい
       - name: 自分のコードに lint をかける
+        if: steps.version.outputs.skip != 'true'
         run: npx --yes web-ext lint --self-hosted --ignore-files "pdf/vendor/**"
 
       - name: AMO に署名してもらう
+        if: steps.version.outputs.skip != 'true'
         env:
           WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
           WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
@@ -78,6 +96,7 @@ jobs:
         run: npx --yes web-ext sign --channel unlisted --timeout 900000
 
       - name: 名前を決め打ちにして、更新情報を書く
+        if: steps.version.outputs.skip != 'true'
         id: build
         run: |
           xpi="cursor-translator-${{ steps.version.outputs.version }}.xpi"
@@ -91,6 +110,7 @@ jobs:
       # 先にリリースを作ってあった場合（GitHubの画面から作ると作られる）は、
       # 作り直さずにそこへ貼る
       - name: リリースに貼る
+        if: steps.version.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.version.outputs.tag }}
