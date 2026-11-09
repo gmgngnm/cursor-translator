@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Cursor Translator",
-  "version": "1.15.0",
+  "version": "1.16.0",
   "description": "ページの英文をマウスで選ぶと、その場に日本語訳を出す。訳は Gemini・DeepL・Google翻訳から選べる",
   "browser_specific_settings": {
     "gecko": {

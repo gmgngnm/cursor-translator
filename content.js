@@ -113,13 +113,17 @@ function buildBubble() {
     body: make("div", { className: "body" }),
     ask: make("button", { className: "act ask", type: "button", textContent: "訳す", hidden: true }),
     engoloyd: make("button", {
-      className: "act engoloyd", type: "button", textContent: "EnGoloydで開く",
-      title: "EnGoloyd で接辞に分解して覚える", hidden: true,
+      className: "act engoloyd", type: "button", textContent: "開く",
+      title: "EnGoloyd で開いて、いま接辞に分解する", hidden: true,
+    }),
+    save: make("button", {
+      className: "act save", type: "button", textContent: "保存",
+      title: "EnGoloyd の「まとめて登録」へ積む。いまは分解しない", hidden: true,
     }),
     settings: make("button", { className: "act settings", type: "button", textContent: "設定を開く", hidden: true }),
     note: make("span", { className: "note" }),
   };
-  parts.foot = make("div", { className: "foot" }, parts.ask, parts.engoloyd, parts.settings, parts.note);
+  parts.foot = make("div", { className: "foot" }, parts.ask, parts.engoloyd, parts.save, parts.settings, parts.note);
   parts.bubble = make(
     "div",
     { className: "bubble", role: "status", "aria-live": "polite", hidden: true },
@@ -214,6 +218,21 @@ function ensureUI() {
     const word = shownWord;
     hide();
     browser.runtime.sendMessage({ type: "open-engoloyd", word });
+  });
+  /* 保存したあとも吹き出しは閉じない。読んでいる場所から離れないための釦
+     なので、閉じてしまうと続きを読むのに目で探し直すことになる */
+  ui.save.addEventListener("click", async () => {
+    const text = shownText;
+    ui.save.disabled = true;
+    const done = await browser.runtime.sendMessage({ type: "save-engoloyd", text });
+    ui.save.disabled = false;
+    if (done && done.ok) {
+      ui.save.textContent = "積んだ";
+      ui.save.disabled = true;
+    } else {
+      /* 添え字の行を借りて理由を出す。訳そのものは消さない */
+      ui.note.textContent = (done && done.message) || "保存できませんでした";
+    }
   });
 
   return ui;
@@ -428,8 +447,14 @@ function render({ kind, message = "", note = "" }) {
   ui.ask.hidden = kind !== "ask";
   /* 訳が出せなかったときでも、単語なら本体アプリへは行ける */
   ui.engoloyd.hidden = !shownWord;
+  /* 「保存」は文でも出す。向こうの「まとめて登録」が、文からでも英単語だけを
+     拾ってくれるため。押す前の姿に戻しておく（前に押した札が残らないように） */
+  ui.save.hidden = !shownText;
+  ui.save.textContent = "保存";
+  ui.save.disabled = false;
   ui.settings.hidden = !(kind === "error" && showSettingsFlag);
-  ui.foot.hidden = ui.ask.hidden && ui.engoloyd.hidden && ui.settings.hidden && !note;
+  ui.foot.hidden = ui.ask.hidden && ui.engoloyd.hidden && ui.save.hidden
+    && ui.settings.hidden && !note;
 
   ui.bubble.hidden = false;
   place();
