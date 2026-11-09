@@ -319,11 +319,11 @@ async function listModels() {
   }
 }
 
-/* 一語だけ選んだときに出る「EnGoloydで開く」。本体アプリは ?w=単語 で開くと
-   そのまま分解に入る */
-async function openEngoloyd(word) {
-  const clean = String(word || "").trim();
-  if (!clean) return { ok: false, message: "単語が空でした" };
+/* EnGoloyd の場所。設定に何を書かれても、開くのはウェブのページだけに
+   しておく。「開く」と「保存」の二つから使う */
+async function engoloydUrl(param, value) {
+  const clean = String(value || "").trim();
+  if (!clean) return { ok: false, message: "渡す中身が空でした" };
   const settings = await loadSettings();
   let url;
   try {
@@ -331,13 +331,46 @@ async function openEngoloyd(word) {
   } catch {
     return { ok: false, message: "EnGoloyd の場所が正しくありません。設定を確かめてください", showSettings: true };
   }
-  /* 設定に何を書かれても、開くのはウェブのページだけにしておく */
   if (url.protocol !== "https:" && url.protocol !== "http:") {
     return { ok: false, message: "EnGoloyd の場所は http(s) で書いてください", showSettings: true };
   }
-  url.searchParams.set("w", clean);
-  await browser.tabs.create({ url: url.toString() });
+  url.searchParams.set(param, clean);
   return { ok: true, url: url.toString() };
+}
+
+/* 一語だけ選んだときに出る「開く」。本体アプリは ?w=単語 で開くと
+   そのまま分解に入る */
+async function openEngoloyd(word) {
+  const made = await engoloydUrl("w", word);
+  if (!made.ok) return made;
+  await browser.tabs.create({ url: made.url });
+  return made;
+}
+
+/* 「保存」で使う裏のタブ。閉じられていたら作り直す */
+let saveTabId = null;
+browser.tabs.onRemoved.addListener((id) => { if (id === saveTabId) saveTabId = null; });
+
+/* 「保存」。読んでいるページから離れずに、EnGoloyd の「まとめて登録」の列へ
+   積む。?add= を受けた向こうは列に積むだけで生成はしないので、読んでいる
+   最中に訳す相手を呼ぶことにはならない。
+   タブは裏で開いたまま使い回す。閉じてしまうと、積んだ列を見に行く先が
+   無くなるうえ、語を溜めるたびにタブが増える */
+async function saveToEngoloyd(text) {
+  const made = await engoloydUrl("add", text);
+  if (!made.ok) return made;
+  if (saveTabId !== null) {
+    try {
+      await browser.tabs.update(saveTabId, { url: made.url });
+      return made;
+    } catch {
+      /* 閉じられていた。作り直す */
+      saveTabId = null;
+    }
+  }
+  const tab = await browser.tabs.create({ url: made.url, active: false });
+  saveTabId = tab.id;
+  return made;
 }
 
 browser.runtime.onMessage.addListener((msg) => {
@@ -349,6 +382,8 @@ browser.runtime.onMessage.addListener((msg) => {
       return listModels();
     case "open-engoloyd":
       return openEngoloyd(msg.word);
+    case "save-engoloyd":
+      return saveToEngoloyd(msg.text);
     case "open-options":
       browser.runtime.openOptionsPage();
       return Promise.resolve({ ok: true });
