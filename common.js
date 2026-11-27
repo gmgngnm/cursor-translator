@@ -44,6 +44,9 @@ const SETTINGS_DEFAULTS = {
      外へ直に書けない（絶対パスは断られる）。元のPDFと同じ場所へ上書きしたい
      ときは、この問いかけでそこへ入れてもらうしかない */
   pdfAskWhereToSave: true,
+  /* PDFのマーカーの色。ビューアの色見本で変えるたびにここへ覚える。
+     読む資料ごとに引き直すわけではないので、前に使った色から始めたい */
+  pdfMarkerColor: "#ff777a",
   bubbleFont: 13,
   bubbleWidth: 380,
   /* 単語を一語だけ選んだときに出る「EnGoloydで開く」の飛び先。既定は

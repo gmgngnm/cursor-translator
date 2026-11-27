@@ -589,6 +589,30 @@ browser.storage.onChanged.addListener((changes, area) => {
 applyAutoSave();
 
 /* ------------------------------------------------------------------ *
+ * マーカーの色
+ * ------------------------------------------------------------------ */
+/* 前に使った色から始める。資料ごとに引き直す物ではないので、開くたびに
+   選び直させると手間になる */
+async function restoreColor() {
+  try {
+    const settings = await loadSettings();
+    const color = String(settings.pdfMarkerColor || "").trim();
+    if (/^#[0-9a-f]{6}$/i.test(color)) el.color.value = color;
+  } catch (err) {
+    /* 覚えを読めなくても、色見本の既定の色で引ける */
+    console.warn("マーカーの色を読めませんでした:", err);
+  }
+}
+
+el.color.addEventListener("change", () => {
+  browser.storage.local.set({ pdfMarkerColor: el.color.value }).catch((err) => {
+    console.warn("マーカーの色を覚えられませんでした:", err);
+  });
+});
+
+restoreColor();
+
+/* ------------------------------------------------------------------ *
  * 入り口
  * ------------------------------------------------------------------ */
 const wanted = new URLSearchParams(location.search).get("file");
