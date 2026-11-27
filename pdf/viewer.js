@@ -501,16 +501,29 @@ function markToAnnot(doc, mark, lib) {
   });
 }
 
+/* 注釈の中の一項を読む。PDFは値を「別の物」として置くことがあり、そのときは
+   辿らないと中身に行き着けない（本物のPDFではよくある形） */
+function entry(doc, dict, key, lib) {
+  if (!dict || typeof dict.get !== "function") return null;
+  const value = dict.get(lib.PDFName.of(key));
+  if (value === undefined || value === null) return null;
+  try {
+    return doc.context.lookup(value);
+  } catch {
+    return null;
+  }
+}
+
 /* うちが付けた注釈かどうか。他の道具が付けた注釈には触らない */
-function isMine(dict, lib) {
-  const title = dict && dict.get && dict.get(lib.PDFName.of("T"));
+function isMine(doc, dict, lib) {
+  const title = entry(doc, dict, "T", lib);
   return Boolean(title && typeof title.decodeText === "function" && title.decodeText() === MINE);
 }
 
-function annotToMark(dict, pageNumber, lib) {
-  const quad = dict.get(lib.PDFName.of("QuadPoints"));
+function annotToMark(doc, dict, pageNumber, lib) {
+  const quad = entry(doc, dict, "QuadPoints", lib);
   if (!quad || !quad.asArray) return null;
-  const numbers = quad.asArray().map((n) => n.asNumber());
+  const numbers = quad.asArray().map((n) => doc.context.lookup(n)).map((n) => n.asNumber());
   const rects = [];
   for (let i = 0; i + 7 < numbers.length; i += 8) {
     const xs = [numbers[i], numbers[i + 2], numbers[i + 4], numbers[i + 6]];
@@ -520,13 +533,15 @@ function annotToMark(dict, pageNumber, lib) {
     rects.push({ x: left, y: bottom, w: right - left, h: top - bottom });
   }
   if (!rects.length) return null;
-  const color = dict.get(lib.PDFName.of("C"));
-  const note = dict.get(lib.PDFName.of("Contents"));
+  const color = entry(doc, dict, "C", lib);
+  const note = entry(doc, dict, "Contents", lib);
   return {
     id: nextId++,
     page: pageNumber,
     rects,
-    color: color && color.asArray ? toHex(color.asArray().map((n) => n.asNumber())) : el.color.value,
+    color: color && color.asArray
+      ? toHex(color.asArray().map((n) => doc.context.lookup(n)).map((n) => n.asNumber()))
+      : el.color.value,
     note: note && typeof note.decodeText === "function" ? note.decodeText() : "",
   };
 }
@@ -548,13 +563,23 @@ async function takeMarksOut(bytes) {
       const kept = [];
       for (const ref of annots.asArray()) {
         const dict = doc.context.lookup(ref);
-        if (!isMine(dict, lib)) { kept.push(ref); continue; }
-        removed += 1;
-        /* 古い版のうちが書いていた付箋(Text)には、線の形が入っていない。
-           線として戻せないので、そのまま落とす（残すと pdf.js が吹き出しの
-           絵を紙の上に描いてしまう） */
-        const mark = annotToMark(dict, index + 1, lib);
-        if (mark) found.push(mark);
+        if (!isMine(doc, dict, lib)) { kept.push(ref); continue; }
+        const mark = annotToMark(doc, dict, index + 1, lib);
+        if (mark) {
+          removed += 1;
+          found.push(mark);
+          continue;
+        }
+        /* うちの印は付いているが、線として戻せなかった。
+           **消さずに残す。** 消すと利用者の引いた線が黙って失われる。
+           古い版のうちが書いていた付箋(Text)だけは、線の形を持たないうえに
+           pdf.js が吹き出しの絵を紙の上に描いてしまうので、そこだけ落とす */
+        const kind = entry(doc, dict, "Subtype", lib);
+        if (kind && typeof kind.asString === "function" && kind.asString() === "/Text") {
+          removed += 1;
+          continue;
+        }
+        kept.push(ref);
       }
       if (kept.length !== annots.size()) {
         page.node.set(lib.PDFName.of("Annots"), doc.context.obj(kept));
