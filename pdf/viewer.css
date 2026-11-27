@@ -10,7 +10,6 @@ body.pdfpage{margin:0; padding:0; overflow:hidden; background:var(--box);}
 }
 .pdfbar b{color:var(--title);}
 .pdfname{flex:1; min-width:40px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--soft); font-size:11px;}
-.pdfmark{display:flex; align-items:center; gap:5px; cursor:pointer; white-space:nowrap;}
 .pdfzoom{display:flex; align-items:center; gap:4px;}
 .pdfzoom .val{min-width:3.4em; text-align:center;}
 #state{min-width:7em; color:var(--soft); font-weight:normal;}
