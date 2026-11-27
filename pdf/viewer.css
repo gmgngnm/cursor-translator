@@ -17,8 +17,10 @@ body.pdfpage{margin:0; padding:0; overflow:hidden; background:var(--box);}
 .pdfnote{
   position:fixed; inset:31px 0 auto 0; z-index:3; margin:0;
   padding:4px 8px; background:var(--box); border-bottom:1px solid var(--line);
-  color:var(--danger); font-size:11px;
+  color:var(--soft); font-size:11px;
 }
+/* 困りごとだけ赤くする。知らせまで赤いと、どれが困りごとか分からなくなる */
+.pdfnote.bad{color:var(--danger);}
 .pdfnote:empty{display:none;}
 #viewerContainer{
   position:absolute; inset:31px 0 0 0;

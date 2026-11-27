@@ -41,6 +41,9 @@ const viewer = new PDFViewer({
   linkService,
   /* pdf.js の書き込み道具は使わない。線はこちらで持つ */
   annotationEditorMode: 0,
+  /* よそのPDFに入っている付箋などの絵の置き場。渡さないとページの直下を
+     探しに行き、見つからず「[Comment Annotation]」のような代替文字が出る */
+  imageResourcesPath: "vendor/images/",
 });
 linkService.setViewer(viewer);
 
@@ -70,8 +73,10 @@ function fillPages() {
   el.page.value = String(viewer.currentPageNumber);
 }
 
-function say(message) {
+/* 添え字の一行。困りごと（bad）は赤く、ただの知らせは控えめに出す */
+function say(message, bad = false) {
   el.note.textContent = message || "";
+  el.note.classList.toggle("bad", Boolean(message) && bad);
 }
 
 function setDirty(value) {
@@ -85,25 +90,29 @@ function setDirty(value) {
  * ------------------------------------------------------------------ */
 async function show(bytes, label, handle = null) {
   say("");
-  originalBytes = bytes;
   fileName = label;
-  marks = [];
   picked = null;
   saveHandle = handle;
   hideEditor();
   setDirty(false);
   el.name.textContent = label;
   document.title = `${label} — Cursor Translator`;
+  /* 前にこのPDFへ引いた線は、注釈として入っている。剥がしてこちらの持ち物に
+     移すと、そのまま消したり覚え書きを書き直したりできる */
+  const taken = await takeMarksOut(bytes);
+  originalBytes = taken.bare;
+  marks = taken.found;
+  if (taken.found.length) say(`前に引いた線を ${taken.found.length} 本読み込みました`);
   try {
     /* pdf.js は渡した配列を自分の物として使ってしまう（中身が空になる）。
        保存のときに元の姿が要るので、写しを渡す */
-    const task = pdfjsLib.getDocument({ data: bytes.slice() });
+    const task = pdfjsLib.getDocument({ data: originalBytes.slice() });
     const doc = await task.promise;
     viewer.setDocument(doc);
     linkService.setDocument(doc, null);
   } catch (err) {
     console.warn("PDFを開けませんでした:", err);
-    say(`開けませんでした: ${err && err.message ? err.message : err}`);
+    say(`開けませんでした: ${err && err.message ? err.message : err}`, true);
   }
 }
 
@@ -115,7 +124,7 @@ async function openUrl(url) {
     const bytes = new Uint8Array(await res.arrayBuffer());
     show(bytes, decodeURIComponent((url.split("/").pop() || "download").split("?")[0]));
   } catch (err) {
-    say(`取りに行けませんでした: ${err && err.message ? err.message : err}`);
+    say(`取りに行けませんでした: ${err && err.message ? err.message : err}`, true);
   }
 }
 
@@ -312,40 +321,134 @@ el.drop.addEventListener("click", () => {
 el.close.addEventListener("click", hideEditor);
 
 /* ------------------------------------------------------------------ *
- * 保存
+ * 保存と読み戻し
+ *
+ * 線は **PDFの注釈（Highlight）として持つ**。紙そのものに描き込むと、
+ * 一度保存したあとは消すことも直すこともできなくなる（開き直したときに
+ * 「どこが線か」を知る手立てが無い）。注釈なら読み戻せるので、前に引いた線を
+ * 消したり覚え書きを書き直したりできる。
+ * 見た目(AP)も一緒に書いておく。これが無いと、注釈を自分で描かない道具では
+ * 何も出ない。
  * ------------------------------------------------------------------ */
+const MINE = "Cursor Translator";   // うちが付けた注釈の目印（注釈の T に入れる）
+
+function pdfLib() {
+  return import("./vendor/pdf-lib.esm.min.js");
+}
+
 function hex(color) {
   const n = parseInt((color || "#ffe066").slice(1), 16);
   return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
 }
 
+function toHex([r, g, b]) {
+  const part = (v) => Math.round(Math.min(Math.max(v, 0), 1) * 255).toString(16).padStart(2, "0");
+  return `#${part(r)}${part(g)}${part(b)}`;
+}
+
+/* 1つの線を Highlight の注釈にする。行ごとの長方形は QuadPoints に並べる */
+function markToAnnot(doc, mark, lib) {
+  const { PDFHexString, PDFRawStream, typedArrayFor } = lib;
+  const [r, g, b] = hex(mark.color);
+  const quads = [];
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const rect of mark.rects) {
+    const left = rect.x, bottom = rect.y, right = rect.x + rect.w, top = rect.y + rect.h;
+    /* QuadPoints の並びは 左上・右上・左下・右下 */
+    quads.push(left, top, right, top, left, bottom, right, bottom);
+    x0 = Math.min(x0, left); y0 = Math.min(y0, bottom);
+    x1 = Math.max(x1, right); y1 = Math.max(y1, top);
+  }
+  /* 見た目。紙に直接ではなく、この注釈の中に描く。
+     文字が透けるよう、乗算で薄く重ねる */
+  const ops = ["/GS gs", `${r} ${g} ${b} rg`,
+    ...mark.rects.map((c) => `${c.x} ${c.y} ${c.w} ${c.h} re f`)].join("\n");
+  const contents = typedArrayFor(ops);
+  const form = PDFRawStream.of(doc.context.obj({
+    Type: "XObject", Subtype: "Form", FormType: 1,
+    BBox: [x0, y0, x1, y1],
+    Resources: { ExtGState: { GS: { Type: "ExtGState", ca: 0.4, BM: "Multiply" } } },
+    Length: contents.length,
+  }), contents);
+  return doc.context.obj({
+    Type: "Annot", Subtype: "Highlight",
+    Rect: [x0, y0, x1, y1],
+    QuadPoints: quads,
+    C: [r, g, b],
+    F: 4,
+    T: PDFHexString.fromText(MINE),
+    Contents: PDFHexString.fromText(mark.note || ""),
+    AP: { N: doc.context.register(form) },
+  });
+}
+
+/* うちが付けた注釈かどうか。他の道具が付けた注釈には触らない */
+function isMine(dict, lib) {
+  const title = dict && dict.get && dict.get(lib.PDFName.of("T"));
+  return Boolean(title && typeof title.decodeText === "function" && title.decodeText() === MINE);
+}
+
+function annotToMark(dict, pageNumber, lib) {
+  const quad = dict.get(lib.PDFName.of("QuadPoints"));
+  if (!quad || !quad.asArray) return null;
+  const numbers = quad.asArray().map((n) => n.asNumber());
+  const rects = [];
+  for (let i = 0; i + 7 < numbers.length; i += 8) {
+    const xs = [numbers[i], numbers[i + 2], numbers[i + 4], numbers[i + 6]];
+    const ys = [numbers[i + 1], numbers[i + 3], numbers[i + 5], numbers[i + 7]];
+    const left = Math.min(...xs), right = Math.max(...xs);
+    const bottom = Math.min(...ys), top = Math.max(...ys);
+    rects.push({ x: left, y: bottom, w: right - left, h: top - bottom });
+  }
+  if (!rects.length) return null;
+  const color = dict.get(lib.PDFName.of("C"));
+  const note = dict.get(lib.PDFName.of("Contents"));
+  return {
+    id: nextId++,
+    page: pageNumber,
+    rects,
+    color: color && color.asArray ? toHex(color.asArray().map((n) => n.asNumber())) : el.color.value,
+    note: note && typeof note.decodeText === "function" ? note.decodeText() : "",
+  };
+}
+
+/* 開いたPDFから、前に引いた線を剥がして取り出す。
+   剥がした方を「元のPDF」として持っておけば、保存のときは今ある線を足すだけで
+   済む。pdf.js にも剥がした方を渡す（残すと、紙に描かれた線とこちらが重ねる線が
+   二重に出る） */
+async function takeMarksOut(bytes) {
+  let lib;
+  try {
+    lib = await pdfLib();
+    const doc = await lib.PDFDocument.load(bytes);
+    const found = [];
+    for (const [index, page] of doc.getPages().entries()) {
+      const annots = page.node.Annots();
+      if (!annots) continue;
+      const kept = [];
+      for (const ref of annots.asArray()) {
+        const dict = doc.context.lookup(ref);
+        if (!isMine(dict, lib)) { kept.push(ref); continue; }
+        const mark = annotToMark(dict, index + 1, lib);
+        if (mark) found.push(mark);
+      }
+      page.node.set(lib.PDFName.of("Annots"), doc.context.obj(kept));
+    }
+    if (!found.length) return { bare: bytes, found };
+    return { bare: await doc.save(), found };
+  } catch (err) {
+    /* 読めない形でも、せめて開けるようにする。線は拾えないが見ることはできる */
+    console.warn("前に引いた線を読めませんでした:", err);
+    return { bare: bytes, found: [] };
+  }
+}
+
 async function build() {
-  const { PDFDocument, rgb, PDFHexString } = await import("./vendor/pdf-lib.esm.min.js");
-  const doc = await PDFDocument.load(originalBytes);
+  const lib = await pdfLib();
+  const doc = await lib.PDFDocument.load(originalBytes);
   for (const mark of marks) {
     const page = doc.getPage(mark.page - 1);
-    const [r, g, b] = hex(mark.color);
-    for (const rect of mark.rects) {
-      /* 線そのものは中身として描く。注釈だけに頼ると、見る道具によっては
-         何も出ない（見た目を持たない注釈を描けない物がある） */
-      page.drawRectangle({
-        x: rect.x, y: rect.y, width: rect.w, height: rect.h,
-        color: rgb(r, g, b), opacity: 0.4, borderWidth: 0,
-      });
-    }
-    if (!mark.note) continue;
-    /* 覚え書きは付箋の注釈として残す。他のPDFの道具でも読める形。
-       日本語が入るので、文字はUTF-16で書く（PDFString だと化ける） */
-    const first = mark.rects[0];
-    const annot = doc.context.obj({
-      Type: "Annot", Subtype: "Text", Name: "Comment",
-      Rect: [first.x, first.y + first.h - 18, first.x + 18, first.y + first.h],
-      Contents: PDFHexString.fromText(mark.note),
-      T: PDFHexString.fromText("Cursor Translator"),
-      C: [r, g, b],
-      F: 4,
-    });
-    page.node.addAnnot(doc.context.register(annot));
+    page.node.addAnnot(doc.context.register(markToAnnot(doc, mark, lib)));
   }
   return doc.save();
 }
@@ -372,7 +475,7 @@ async function save(quiet = false) {
     if (!quiet) say("");
   } catch (err) {
     console.warn("保存できませんでした:", err);
-    say(`保存できませんでした: ${err && err.message ? err.message : err}`);
+    say(`保存できませんでした: ${err && err.message ? err.message : err}`, true);
   }
 }
 
