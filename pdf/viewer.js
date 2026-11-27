@@ -422,6 +422,7 @@ async function takeMarksOut(bytes) {
     lib = await pdfLib();
     const doc = await lib.PDFDocument.load(bytes);
     const found = [];
+    let removed = 0;
     for (const [index, page] of doc.getPages().entries()) {
       const annots = page.node.Annots();
       if (!annots) continue;
@@ -429,12 +430,21 @@ async function takeMarksOut(bytes) {
       for (const ref of annots.asArray()) {
         const dict = doc.context.lookup(ref);
         if (!isMine(dict, lib)) { kept.push(ref); continue; }
+        removed += 1;
+        /* 古い版のうちが書いていた付箋(Text)には、線の形が入っていない。
+           線として戻せないので、そのまま落とす（残すと pdf.js が吹き出しの
+           絵を紙の上に描いてしまう） */
         const mark = annotToMark(dict, index + 1, lib);
         if (mark) found.push(mark);
       }
-      page.node.set(lib.PDFName.of("Annots"), doc.context.obj(kept));
+      if (kept.length !== annots.size()) {
+        page.node.set(lib.PDFName.of("Annots"), doc.context.obj(kept));
+      }
     }
-    if (!found.length) return { bare: bytes, found };
+    /* 剥がした物が1つでもあれば、剥がした方を渡す。
+       線として戻せたかどうかで決めてはいけない（戻せない古い付箋が
+       そのまま画面に出てしまう） */
+    if (!removed) return { bare: bytes, found };
     return { bare: await doc.save(), found };
   } catch (err) {
     /* 読めない形でも、せめて開けるようにする。線は拾えないが見ることはできる */

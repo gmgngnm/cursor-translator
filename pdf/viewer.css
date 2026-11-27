@@ -29,6 +29,14 @@ body.pdfpage{margin:0; padding:0; overflow:hidden; background:var(--box);}
 /* pdf.js が描く紙。影は付けず、枠だけで区切る */
 .pdfViewer .page{border:1px solid var(--line); margin:8px auto; background:#fff;}
 
+/* pdf.js が描く付箋の絵と、その吹き出しは出さない。紙の字に重なって読めなく
+   なるうえ、覚え書きは線を押せば出るので要らない。
+   当たり判定だけ残ると線を押せなくなるので、それも通り抜けさせる */
+.annotationLayer .textAnnotation,
+.annotationLayer .popupAnnotation,
+.annotationLayer .popup{display:none;}
+.annotationLayer .popupTriggerArea{pointer-events:none;}
+
 /* 引いた線を重ねる層。紙（canvas）の上、字の層の下。
    z-index は付けない。付けると層が独立してしまい、下の紙と混ざらなくなる
    （蛍光ペンのつもりが、字を塗りつぶしてしまう） */
