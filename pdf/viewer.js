@@ -158,15 +158,42 @@ function pageOf(node) {
   return element ? element.closest(".page") : null;
 }
 
+/* 選んだ範囲の箱を、行ごとに1つへまとめる。
+   getClientRects() は字の塊ごとに箱を返し、その高さは字によって違う
+   （（ ）のような約物は、同じ行の仮名より背の高い箱になる）。そのまま引くと
+   線が凸凹する。縦に重なっている箱を同じ行とみなして、その行を覆う長方形を
+   1つだけ返す */
+function lineBands(rectList) {
+  const lines = [];
+  for (const rect of rectList) {
+    if (rect.width < 1 || rect.height < 1) continue;
+    /* 低い方の高さの半分より深く重なっていれば同じ行。行間が空いていれば
+       この条件を満たさないので、隣の行まで繋がることはない */
+    const line = lines.find((l) => {
+      const overlap = Math.min(l.bottom, rect.bottom) - Math.max(l.top, rect.top);
+      return overlap > Math.min(l.bottom - l.top, rect.height) / 2;
+    });
+    if (!line) {
+      lines.push({ top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right });
+      continue;
+    }
+    /* 行を覆うように広げる。狭める向きには動かさない（字が線からはみ出す） */
+    line.top = Math.min(line.top, rect.top);
+    line.bottom = Math.max(line.bottom, rect.bottom);
+    line.left = Math.min(line.left, rect.left);
+    line.right = Math.max(line.right, rect.right);
+  }
+  return lines;
+}
+
 /* 画面の座標をPDFの座標に直して持つ。拡大しても紙の同じ場所に残るように */
 function marksFromSelection() {
   const selection = window.getSelection();
   if (!selection || selection.isCollapsed || !selection.rangeCount) return [];
   const range = selection.getRangeAt(0);
   const made = new Map();
-  for (const rect of range.getClientRects()) {
-    if (rect.width < 1 || rect.height < 1) continue;
-    const pageDiv = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+  for (const rect of lineBands(range.getClientRects())) {
+    const pageDiv = document.elementFromPoint((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2);
     const page = pageOf(pageDiv) || pageOf(range.startContainer);
     if (!page) continue;
     const num = Number(page.dataset.pageNumber);
@@ -222,24 +249,29 @@ function drawMarks() {
   }
 }
 
-/* マーカーを入れている間は、選んだところに線を引く。選択はその場で解いて、
-   訳の吹き出しが同時に出ないようにする（content.js は mouseup の後に選択を
-   読みに来るので、ここで解けば出ない） */
-document.addEventListener("mouseup", (event) => {
-  if (!el.marker.checked || el.editor.contains(event.target)) return;
+/* 文字を選んでから「マーカー」を押すと、そこに線が引かれる。
+   押した拍子に選択が解けてしまうと引く先が無くなるので、mousedown の既定の
+   動きを止める（焦点が移らなければ選択はそのまま残る） */
+el.marker.addEventListener("mousedown", (event) => event.preventDefault());
+el.marker.addEventListener("click", () => {
   const made = marksFromSelection();
-  if (!made.length) return;
+  if (!made.length) {
+    say("先に、線を引きたいところを選んでください");
+    return;
+  }
   marks.push(...made);
+  /* 引いたら選択は解く。引いた線が選択の青に隠れて見えないため */
   window.getSelection().removeAllRanges();
   drawnAt = Date.now();
   drawMarks();
   setDirty(true);
-}, true);
+  say("");
+});
 
 /* 線は字の層の下に敷いてあるので、押して当たるのは字の方。押した点の真下まで
    見に行って、線があればその線の覚え書きを開く */
 document.addEventListener("click", (event) => {
-  if (el.editor.contains(event.target)) return;
+  if (el.editor.contains(event.target) || event.target === el.marker) return;
   /* 引いた直後の押しは、いま引いた線の欄をいきなり開いてしまうので見送る */
   if (Date.now() - drawnAt < 400) return;
   const selection = window.getSelection();
