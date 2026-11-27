@@ -531,11 +531,16 @@ async function save(quiet = false) {
       await writable.write(bytes);
       await writable.close();
     } else {
-      /* その仕組みが無いブラウザでは、同じ名前でダウンロードの置き場へ
-         上書きする。拡張機能はそこより外へは書けない */
+      /* Firefox の拡張機能は、ダウンロードの置き場より外へ直に書けない
+         （絶対パスは断られる）。元のPDFと同じ場所へ上書きしたいときは、
+         置き場の問いかけでそこへ入れてもらうしかない。
+         勝手に保存する回（quiet）は聞かない。読んでいる間じゅう問いかけが
+         出ることになるため */
+      const settings = await loadSettings();
+      const ask = !quiet && settings.pdfAskWhereToSave !== false;
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       await browser.downloads.download({
-        url, filename: fileName || "marked.pdf", conflictAction: "overwrite", saveAs: false,
+        url, filename: fileName || "marked.pdf", conflictAction: "overwrite", saveAs: ask,
       });
       setTimeout(() => URL.revokeObjectURL(url), 30000);
     }

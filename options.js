@@ -23,6 +23,7 @@ const el = {
   inkColor: document.getElementById("bubble-ink"),
   preview: document.getElementById("bubble-preview"),
   autosave: document.getElementById("autosave"),
+  askWhere: document.getElementById("ask-where"),
   theme: document.getElementById("theme"),
   accent: document.getElementById("accent"),
   status: document.getElementById("status"),
@@ -124,6 +125,7 @@ async function init() {
   el.inkColor.value = settings.bubbleInk;
   drawPreview();
   fillSelect(el.autosave, AUTO_SAVES, String(clampNum(settings.pdfAutoSave, 0, 3600, 0)));
+  el.askWhere.checked = settings.pdfAskWhereToSave !== false;
   fillSelect(el.theme, THEMES, settings.theme);
   fillSelect(el.accent, ACCENTS, settings.accent);
   applyLook(settings);
@@ -158,6 +160,7 @@ el.engine.addEventListener("change", () => {
 });
 
 el.autosave.addEventListener("change", () => saveSoon({ pdfAutoSave: Number(el.autosave.value) }, 0));
+el.askWhere.addEventListener("change", () => saveSoon({ pdfAskWhereToSave: el.askWhere.checked }, 0));
 el.enabled.addEventListener("change", () => saveSoon({ enabled: el.enabled.checked }, 0));
 el.hover.addEventListener("change", () => saveSoon({ hover: el.hover.checked }, 0));
 /* つまみを動かしている間は数字だけ追わせ、離したところで保存する */
