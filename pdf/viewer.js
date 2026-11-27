@@ -30,6 +30,8 @@ let picked = null;          // いま注釈を書いている線
 let saveHandle = null;      // 上書き先（この仕組みを持つブラウザでだけ使う）
 let autoTimer = null;
 let nextId = 1;
+let wantPage = 0;          // 開いたとき、どのページから始めるか
+let pageTimer = null;
 let drawnAt = 0;          // 線を引き終えた時刻。その直後の押しは拾わない
 
 const eventBus = new EventBus();
@@ -49,12 +51,22 @@ linkService.setViewer(viewer);
 
 eventBus.on("pagesinit", () => {
   viewer.currentScaleValue = "page-width";
+  /* 前に見ていたページから始める。読みかけの資料を開くたびに
+     めくり直すのは手間なので */
+  if (wantPage > 1) viewer.currentPageNumber = Math.min(wantPage, viewer.pagesCount);
+  wantPage = 0;
   showScale();
   fillPages();
   drawMarks();
 });
 eventBus.on("scalechanging", () => { showScale(); drawMarks(); });
-eventBus.on("pagechanging", () => { el.page.value = String(viewer.currentPageNumber); });
+eventBus.on("pagechanging", () => {
+  el.page.value = String(viewer.currentPageNumber);
+  /* めくるたびに書くと、送っている間じゅう書き続けることになる。
+     手が止まってから書く */
+  clearTimeout(pageTimer);
+  pageTimer = setTimeout(rememberPage, 500);
+});
 eventBus.on("pagerendered", drawMarks);
 
 function showScale() {
@@ -74,6 +86,37 @@ function fillPages() {
 }
 
 /* 添え字の一行。困りごと（bad）は赤く、ただの知らせは控えめに出す */
+/* 前に見ていたページは、ファイルの名前で覚える。同じ名前の別の資料だと
+   取り違えるが、ページ数で頭打ちにしてあるので行き過ぎることはない */
+const PAGE_MEMORY = "pdfLastPage";
+const PAGE_MEMORY_MAX = 50;   // 覚えておく資料の数。溜め込み続けないため
+
+async function rememberPage() {
+  if (!fileName || !viewer.pagesCount) return;
+  try {
+    const store = await browser.storage.local.get({ [PAGE_MEMORY]: {} });
+    const map = Object.assign({}, store[PAGE_MEMORY]);
+    map[fileName] = { page: viewer.currentPageNumber, at: Date.now() };
+    const recent = Object.keys(map).sort((a, b) => (map[b].at || 0) - (map[a].at || 0));
+    const kept = {};
+    for (const name of recent.slice(0, PAGE_MEMORY_MAX)) kept[name] = map[name];
+    await browser.storage.local.set({ [PAGE_MEMORY]: kept });
+  } catch (err) {
+    /* 覚えられなくても読むことはできる。黙って諦める */
+    console.warn("開いていたページを覚えられませんでした:", err);
+  }
+}
+
+async function rememberedPage(label) {
+  try {
+    const store = await browser.storage.local.get({ [PAGE_MEMORY]: {} });
+    const row = (store[PAGE_MEMORY] || {})[label];
+    return row && row.page > 0 ? row.page : 0;
+  } catch {
+    return 0;
+  }
+}
+
 function say(message, bad = false) {
   el.note.textContent = message || "";
   el.note.classList.toggle("bad", Boolean(message) && bad);
@@ -102,6 +145,7 @@ async function show(bytes, label, handle = null) {
   const taken = await takeMarksOut(bytes);
   originalBytes = taken.bare;
   marks = taken.found;
+  wantPage = await rememberedPage(label);
   if (taken.found.length) say(`前に引いた線を ${taken.found.length} 本読み込みました`);
   try {
     /* pdf.js は渡した配列を自分の物として使ってしまう（中身が空になる）。
@@ -263,11 +307,13 @@ function drawMarks() {
    動きを止める（焦点が移らなければ選択はそのまま残る） */
 el.marker.addEventListener("mousedown", (event) => event.preventDefault());
 el.marker.addEventListener("click", () => {
+  if (!applyMarker()) say("先に、線を引きたいところを選んでください");
+});
+
+/* 選んでいるところに線を引く。引けたら true */
+function applyMarker() {
   const made = marksFromSelection();
-  if (!made.length) {
-    say("先に、線を引きたいところを選んでください");
-    return;
-  }
+  if (!made.length) return false;
   marks.push(...made);
   /* 引いたら選択は解く。引いた線が選択の青に隠れて見えないため */
   window.getSelection().removeAllRanges();
@@ -275,6 +321,18 @@ el.marker.addEventListener("click", () => {
   drawMarks();
   setDirty(true);
   say("");
+  return true;
+}
+
+/* 選んだところを右クリックしても引ける。釦まで手を動かさずに済む。
+   紙の上で、かつ何か選んでいるときだけ横取りする。選んでいなければ
+   いつもの右クリックの献立をそのまま出す */
+document.addEventListener("contextmenu", (event) => {
+  if (!el.viewerContainer.contains(event.target)) return;
+  const selection = window.getSelection();
+  if (!selection || selection.isCollapsed) return;
+  if (!applyMarker()) return;
+  event.preventDefault();
 });
 
 /* 線は字の層の下に敷いてあるので、押して当たるのは字の方。押した点の真下まで
@@ -337,7 +395,7 @@ function pdfLib() {
 }
 
 function hex(color) {
-  const n = parseInt((color || "#ffe066").slice(1), 16);
+  const n = parseInt((color || "#ff777a").slice(1), 16);
   return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
 }
 
