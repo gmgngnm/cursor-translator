@@ -129,6 +129,47 @@ function setDirty(value) {
 }
 
 /* ------------------------------------------------------------------ *
+ * 戻す（Ctrl+Z）
+ *
+ * 線の一覧をまるごと控えて、戻すときはそこへ戻す。線は数も中身も小さいので、
+ * 何をどう変えたかを細かく覚えるより、この方が取り違えが無い。
+ * ------------------------------------------------------------------ */
+const HISTORY_MAX = 50;   // 控えておく手数。際限なく溜めないため
+const history = [];
+/* 最後に保存したときの姿。これと見比べて「未保存」を決める。
+   戻して元の姿に戻ったときに、未保存のままにしないため */
+let savedState = "[]";
+
+function stamp() {
+  return JSON.stringify(marks);
+}
+
+/* 変える前に呼ぶ */
+function remember() {
+  history.push(stamp());
+  if (history.length > HISTORY_MAX) history.shift();
+}
+
+/* 変えた後に呼ぶ。保存したときの姿と同じなら、未保存ではない */
+function touched() {
+  setDirty(stamp() !== savedState);
+}
+
+function undo() {
+  if (!history.length) {
+    say("戻せるものはありません");
+    return;
+  }
+  marks = JSON.parse(history.pop());
+  /* 戻した線の番号とぶつからないよう、次の番号を先へ送る */
+  for (const mark of marks) nextId = Math.max(nextId, mark.id + 1);
+  hideEditor();
+  drawMarks();
+  touched();
+  if (!history.length) say("");
+}
+
+/* ------------------------------------------------------------------ *
  * 開く
  * ------------------------------------------------------------------ */
 async function show(bytes, label, handle = null) {
@@ -146,6 +187,9 @@ async function show(bytes, label, handle = null) {
   originalBytes = taken.bare;
   marks = taken.found;
   wantPage = await rememberedPage(label);
+  /* 開いた時点の姿を、未保存かどうかの基準にする。戻す手数も持ち越さない */
+  savedState = stamp();
+  history.length = 0;
   if (taken.found.length) say(`前に引いた線を ${taken.found.length} 本読み込みました`);
   try {
     /* pdf.js は渡した配列を自分の物として使ってしまう（中身が空になる）。
@@ -243,7 +287,11 @@ function lineBands(rectList) {
 function marksFromSelection() {
   const selection = window.getSelection();
   if (!selection || selection.isCollapsed || !selection.rangeCount) return [];
-  const range = selection.getRangeAt(0);
+  return marksFromRange(selection.getRangeAt(0));
+}
+
+function marksFromRange(range) {
+  if (!range) return [];
   const made = new Map();
   for (const rect of lineBands(range.getClientRects())) {
     const pageDiv = document.elementFromPoint((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2);
@@ -310,16 +358,18 @@ el.marker.addEventListener("click", () => {
   if (!applyMarker()) say("先に、線を引きたいところを選んでください");
 });
 
-/* 選んでいるところに線を引く。引けたら true */
-function applyMarker() {
-  const made = marksFromSelection();
+/* 渡されたところに線を引く。何も渡さなければ、いま選んでいるところ。
+   引けたら true */
+function applyMarker(range = null) {
+  const made = range ? marksFromRange(range) : marksFromSelection();
   if (!made.length) return false;
+  remember();
   marks.push(...made);
   /* 引いたら選択は解く。引いた線が選択の青に隠れて見えないため */
   window.getSelection().removeAllRanges();
   drawnAt = Date.now();
   drawMarks();
-  setDirty(true);
+  touched();
   say("");
   return true;
 }
@@ -330,8 +380,17 @@ function applyMarker() {
 document.addEventListener("contextmenu", (event) => {
   if (!el.viewerContainer.contains(event.target)) return;
   const selection = window.getSelection();
-  if (!selection || selection.isCollapsed) return;
-  if (!applyMarker()) return;
+  if (selection && !selection.isCollapsed) {
+    if (applyMarker()) event.preventDefault();
+    return;
+  }
+  /* 何も選んでいないときは、カーソルタッチ翻訳がいま出している語に引く。
+     読みながら、知らない語をその場で拾っていけるように。
+     どの語かは content.js に尋ねる（出ていなければ何も返らない） */
+  const asked = { word: "", range: null };
+  document.dispatchEvent(new CustomEvent("engoloyd-hover-word", { detail: asked }));
+  if (!asked.range) return;
+  if (!applyMarker(asked.range)) return;
   event.preventDefault();
 });
 
@@ -364,17 +423,19 @@ function hideEditor() {
 
 el.apply.addEventListener("click", () => {
   if (!picked) return;
+  remember();
   picked.note = el.text.value.trim();
   hideEditor();
   drawMarks();
-  setDirty(true);
+  touched();
 });
 el.drop.addEventListener("click", () => {
   if (!picked) return;
+  remember();
   marks = marks.filter((m) => m.id !== picked.id);
   hideEditor();
   drawMarks();
-  setDirty(true);
+  touched();
 });
 el.close.addEventListener("click", hideEditor);
 
@@ -544,6 +605,7 @@ async function save(quiet = false) {
       });
       setTimeout(() => URL.revokeObjectURL(url), 30000);
     }
+    savedState = stamp();
     setDirty(false);
     if (!quiet) say("");
   } catch (err) {
@@ -558,6 +620,12 @@ document.addEventListener("keydown", (event) => {
   if ((event.ctrlKey || event.metaKey) && event.key === "s") {
     event.preventDefault();
     save();
+  }
+  if ((event.ctrlKey || event.metaKey) && event.key === "z") {
+    /* 覚え書きを書いている間は、その欄の戻すをそのまま使わせる */
+    if (el.editor.contains(event.target)) return;
+    event.preventDefault();
+    undo();
   }
   if (event.key === "Escape" && !el.editor.hidden) hideEditor();
 });

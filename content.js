@@ -152,6 +152,9 @@ let placeQueued = false;
 /* いま出ている吹き出しが、選んで出した物か、カーソルを合わせて出た物か。
    合わせて出た物だけ、離れたときに引っ込める */
 let hoverSource = false;
+/* カーソルで出している語の居場所。同梱のPDFビューアが、右クリックで
+   その語に線を引くために尋ねてくる */
+let hoverRange = null;
 let hoverTimer = null;
 let hoverLeaveTimer = null;
 let hoverPoint = null;
@@ -469,6 +472,7 @@ function hide() {
   shownWord = "";
   translation = "";
   hoverSource = false;
+  hoverRange = null;
   clearHoverTimers();
   hoverPoint = null;
   if (ui) ui.bubble.hidden = true;
@@ -579,6 +583,7 @@ function onDwell(point) {
   if (hoverSource && found.word === shownText && ui && !ui.bubble.hidden) return;
 
   hoverSource = true;
+  hoverRange = found.range;
   anchor = {
     text: found.word,
     rectOf: () => found.range.getBoundingClientRect(),
@@ -590,6 +595,18 @@ function onDwell(point) {
   showSettingsFlag = false;
   startTranslate(found.word);
 }
+
+/* 同梱のPDFビューアから「いまカーソルで出している語はどこか」を尋ねられる。
+   ビューアの中では、これとビューアが同じ所で動いているので Range をそのまま
+   渡せる。普通のページでは別の所で動くが、そこにはビューアが居ないので
+   尋ねられることもない。
+   これが唯一の繋ぎ目なので、消すなら向こうの右クリックも一緒に外すこと */
+document.addEventListener("engoloyd-hover-word", (event) => {
+  if (!event.detail || !hoverSource || !hoverRange) return;
+  if (!ui || ui.bubble.hidden) return;
+  event.detail.word = shownWord;
+  event.detail.range = hoverRange;
+});
 
 /* ------------------------------------------------------------------ *
  * ページ側の出来事
@@ -623,6 +640,7 @@ function handleSelection(target) {
   translation = "";
   showSettingsFlag = false;
   hoverSource = false;
+  hoverRange = null;
   clearHoverTimers();
 
   if (text.length > MAX_CHARS) {
