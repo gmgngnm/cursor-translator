@@ -40,6 +40,10 @@ const SETTINGS_DEFAULTS = {
   bubbleInk: "#000000",
   /* PDFに引いた線を、何秒ごとに勝手に保存するか。0 は自動で保存しない */
   pdfAutoSave: 0,
+  /* 保存のたびに置き場を聞くか。Firefox の拡張機能は、ダウンロードの置き場より
+     外へ直に書けない（絶対パスは断られる）。元のPDFと同じ場所へ上書きしたい
+     ときは、この問いかけでそこへ入れてもらうしかない */
+  pdfAskWhereToSave: true,
   bubbleFont: 13,
   bubbleWidth: 380,
   /* 単語を一語だけ選んだときに出る「EnGoloydで開く」の飛び先。既定は

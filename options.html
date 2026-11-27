@@ -50,9 +50,12 @@
 
   <div class="grp">PDF</div>
   <table>
+    <tr><td class="k"><label for="ask-where">置き場を聞く</label></td>
+      <td><input type="checkbox" class="sw" id="ask-where">
+        <span class="note">保存のたびに置き場を聞きます。元のPDFと同じ場所へ上書きしたいときは入れてください。切っていると、ダウンロードの置き場に同じ名前で上書きします（Firefox の拡張機能は、そこより外へ直に書けません）</span></td></tr>
     <tr><td class="k"><label for="autosave">自動保存</label></td>
       <td><select id="autosave"></select>
-        <span class="note">同梱のビューアでPDFに線を引いたとき、何秒ごとに勝手に保存するか。書き込んだ物は同じ名前で上書きします</span></td></tr>
+        <span class="note">同梱のビューアでPDFに線を引いたとき、何秒ごとに勝手に保存するか。自動保存のときは置き場を聞かず、ダウンロードの置き場へ黙って上書きします</span></td></tr>
   </table>
 
   <div class="grp">吹き出しの見た目</div>
