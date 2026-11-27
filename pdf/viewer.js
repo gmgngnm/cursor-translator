@@ -479,14 +479,15 @@ function markToAnnot(doc, mark, lib) {
     x1 = Math.max(x1, right); y1 = Math.max(y1, top);
   }
   /* 見た目。紙に直接ではなく、この注釈の中に描く。
-     文字が透けるよう、乗算で薄く重ねる */
+     文字が透けるのは乗算（Multiply）のおかげで、薄める必要は無い。
+     薄めると、画面で見ている線より淡い物が書き出されて食い違う */
   const ops = ["/GS gs", `${r} ${g} ${b} rg`,
     ...mark.rects.map((c) => `${c.x} ${c.y} ${c.w} ${c.h} re f`)].join("\n");
   const contents = typedArrayFor(ops);
   const form = PDFRawStream.of(doc.context.obj({
     Type: "XObject", Subtype: "Form", FormType: 1,
     BBox: [x0, y0, x1, y1],
-    Resources: { ExtGState: { GS: { Type: "ExtGState", ca: 0.4, BM: "Multiply" } } },
+    Resources: { ExtGState: { GS: { Type: "ExtGState", BM: "Multiply" } } },
     Length: contents.length,
   }), contents);
   return doc.context.obj({
