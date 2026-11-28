@@ -15,7 +15,7 @@ const el = {};
 for (const id of ["open", "file", "name", "marker", "color", "page", "scale", "in", "out",
                   "save", "note", "viewerContainer", "editor", "text", "apply", "drop", "close",
                   "vocab", "vocabulary", "vocab-list", "vocab-count", "vocab-empty", "vocab-close",
-                  "note-text", "note-close"]) {
+                  "note-text", "note-close", "said"]) {
   /* vocab-list のような名前は、使うときに el["vocab-list"] と書く */
   el[id] = document.getElementById(id);
 }
@@ -334,7 +334,7 @@ function marksFromRange(range) {
      読み込みの順で居なければ、素の文字列で我慢する */
   const text = typeof textOfRange === "function" ? textOfRange(range) : range.toString();
   return [...made.entries()].map(([page, rects]) => ({
-    id: nextId++, page, rects, color: el.color.value, note: "", text,
+    id: nextId++, page, rects, color: el.color.value, note: "", text, said: "",
   }));
 }
 
@@ -436,6 +436,9 @@ document.addEventListener("contextmenu", (event) => {
  * 訳す相手を呼び直したりするのは無駄。覚えてある分だけを出す
  * ------------------------------------------------------------------ */
 let hoveredMark = 0;
+let shownMark = 0;          // こちらが訳を出させた線。離れたら引っ込める
+/* 吹き出しの入れ物。中に居るあいだは引っ込めない */
+const BUBBLE_HOST = "engoloyd-select-to-ja";
 
 function markAt(x, y) {
   const box = document.elementsFromPoint(x, y)
@@ -445,21 +448,34 @@ function markAt(x, y) {
 }
 
 document.addEventListener("mousemove", async (event) => {
-  if (!el.viewerContainer.contains(event.target)) return;
-  const mark = markAt(event.clientX, event.clientY);
+  /* 吹き出しの上に居るあいだはそのまま。中の釦を押しに行けるように
+     （影の中の出来事は、入れ物そのものから出たことになる） */
+  if (event.target && event.target.closest && event.target.closest(`#${BUBBLE_HOST}`)) return;
+  const inside = el.viewerContainer.contains(event.target);
+  const mark = inside ? markAt(event.clientX, event.clientY) : null;
   if (!mark || !mark.text) {
     hoveredMark = 0;
+    /* 線から離れた。こちらが出させた訳は、その場で引っ込める。
+       待ってから消えると、次に読む行に被ったままになる */
+    if (shownMark) {
+      shownMark = 0;
+      document.dispatchEvent(new CustomEvent("engoloyd-hide"));
+    }
     return;
   }
   if (hoveredMark === mark.id) return;      // 同じ線の上を動いているだけ
   hoveredMark = mark.id;
   const settings = await loadSettings();
   if (!settings.enabled) return;            // ハイライト翻訳が切ってある
-  let res;
-  try {
-    res = await browser.runtime.sendMessage({ type: "recall", text: mark.text });
-  } catch {
-    res = null;
+  /* 書き換えた意味があれば、覚えより先に立てる。思った意味でない訳が
+     出てしまうことがあるので、そこは利用者が決められるようにしてある */
+  let res = mark.said ? { ok: true, translation: mark.said, via: "yours" } : null;
+  if (!res) {
+    try {
+      res = await browser.runtime.sendMessage({ type: "recall", text: mark.text });
+    } catch {
+      res = null;
+    }
   }
   if (hoveredMark !== mark.id) return;      // 待っている間に離れた
   const box = document.querySelector(`.markLayer .mark[data-id="${mark.id}"]`);
@@ -467,6 +483,7 @@ document.addEventListener("mousemove", async (event) => {
   /* 覚えていればそれを出す。まだ訳していなければ訳しに行かせる。
      どちらにしても待ち時間は掛けない（線を引いたのは利用者がそこを選んだ
      ということなので、読み流しと同じに扱わない） */
+  shownMark = mark.id;
   document.dispatchEvent(new CustomEvent("engoloyd-show", {
     detail: {
       text: mark.text,
@@ -492,11 +509,26 @@ document.addEventListener("click", (event) => {
   if (!mark) return;
   picked = mark;
   el.text.value = mark.note;
+  /* 見えている意味をそのまま入れておく。書き換えたい人は直せばよく、
+     触らなければ元のままになる */
+  el.said.value = mark.said || "";
+  if (!el.said.value && mark.text) {
+    const asked = mark.id;
+    browser.runtime.sendMessage({ type: "recall", text: mark.text })
+      .then((res) => {
+        /* 待っている間に別の線へ移っていたら、入れない */
+        if (picked && picked.id === asked && !el.said.value && res && res.ok) {
+          el.said.value = res.translation;
+        }
+      })
+      .catch(() => { /* 覚えを引けなくても書き込みはできる */ });
+  }
   const rect = box.getBoundingClientRect();
   el.editor.hidden = false;
   el.editor.style.left = `${Math.min(rect.left, window.innerWidth - 250)}px`;
-  el.editor.style.top = `${Math.min(rect.bottom + 6, window.innerHeight - 120)}px`;
-  el.text.focus();
+  el.editor.style.top = `${Math.min(rect.bottom + 6, window.innerHeight - 160)}px`;
+  el.said.focus();
+  el.said.select();
 });
 
 function hideEditor() {
@@ -508,6 +540,7 @@ el.apply.addEventListener("click", () => {
   if (!picked) return;
   remember();
   picked.note = el.text.value.trim();
+  picked.said = el.said.value.trim();
   hideEditor();
   drawMarks();
   touched();
@@ -559,9 +592,9 @@ async function drawVocab() {
     head.textContent = mark.text || "(no text)";
     body.append(head);
 
-    /* 訳は覚えてある分だけ。まだ訳していなければ何も出さない */
-    let said = "";
-    if (mark.text) {
+    /* 書き換えた意味があればそれを。無ければ覚えてある分だけ */
+    let said = mark.said || "";
+    if (!said && mark.text) {
       try {
         const res = await browser.runtime.sendMessage({ type: "recall", text: mark.text });
         if (res && res.ok) said = res.translation;
@@ -679,6 +712,9 @@ function markToAnnot(doc, mark, lib) {
        読み飛ばす決まりなので、他の道具の邪魔にはならない。
        これが無いと、開き直したあとに訳を引く手がかりが無くなる */
     Subj: PDFHexString.fromText(mark.text || ""),
+    /* 書き換えた意味。空なら覚えてある訳をそのまま使う。
+       うちだけが読む項なので、名前がぶつからないように CT を冠する */
+    CTMeaning: PDFHexString.fromText(mark.said || ""),
     AP: { N: doc.context.register(form) },
   });
 }
@@ -718,11 +754,13 @@ function annotToMark(doc, dict, pageNumber, lib) {
   const color = entry(doc, dict, "C", lib);
   const note = entry(doc, dict, "Contents", lib);
   const text = entry(doc, dict, "Subj", lib);
+  const said = entry(doc, dict, "CTMeaning", lib);
   return {
     id: nextId++,
     page: pageNumber,
     rects,
     text: text && typeof text.decodeText === "function" ? text.decodeText() : "",
+    said: said && typeof said.decodeText === "function" ? said.decodeText() : "",
     color: color && color.asArray
       ? toHex(color.asArray().map((n) => doc.context.lookup(n)).map((n) => n.asNumber()))
       : el.color.value,

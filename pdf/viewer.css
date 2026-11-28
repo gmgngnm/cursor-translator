@@ -89,6 +89,11 @@ body.with-side #viewerContainer{right:300px;}
   font-size:12px;
 }
 .pdfeditor[hidden]{display:none;}
+.pdfeditor input[type="text"]{
+  width:100%; box-sizing:border-box; margin-bottom:5px;
+  border:1px solid var(--line); background:var(--field); color:var(--ink);
+  font:inherit; font-size:12px;
+}
 .pdfeditor textarea{
   width:100%; box-sizing:border-box; resize:vertical;
   border:1px solid var(--line); background:var(--field); color:var(--ink);
