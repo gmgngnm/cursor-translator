@@ -557,6 +557,18 @@ el.drop.addEventListener("click", () => {
 });
 el.close.addEventListener("click", hideEditor);
 
+/* 欄の中で Enter を押したら、釦を押さずに書き込みを済ませる。
+   意味は一行なので Enter そのまま。覚え書きは行を変えたいことがあるので、
+   そちらは Ctrl+Enter（Mac では Cmd+Enter）。
+   釦に焦点があるときは、その釦の仕事をそのままさせる */
+el.editor.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  if (event.target.tagName === "BUTTON") return;
+  if (event.target === el.text && !(event.ctrlKey || event.metaKey)) return;
+  event.preventDefault();
+  el.apply.click();
+});
+
 /* ------------------------------------------------------------------ *
  * vocabulary（引いた線の一覧）
  *
