@@ -125,11 +125,11 @@ const ENGINES = {
     },
     describe(status, detail, settings) {
       if (status === 400 && /API[_ ]?key/i.test(detail)) {
-        return { message: "APIキーが正しくないようです。設定を確かめてください", showSettings: true };
+        return { message: "That API key looks wrong. Check the settings.", showSettings: true };
       }
       if (status === 404) {
         return {
-          message: `モデル「${this.variant(settings)}」が見つかりません。設定でモデル名を確かめてください`,
+          message: `No such model: ${this.variant(settings)}. Check the model name in the settings.`,
           showSettings: true,
         };
       }
@@ -169,11 +169,11 @@ const ENGINES = {
     },
     describe(status) {
       if (status === 403) {
-        return { message: "DeepL にAPIキーを拒まれました。設定を確かめてください", showSettings: true };
+        return { message: "DeepL rejected the API key. Check the settings.", showSettings: true };
       }
       /* DeepL は上限切れを 456 という独自の番号で返す */
       if (status === 456) {
-        return { message: "DeepL の今期の上限に達しました" };
+        return { message: "DeepL quota for this period is used up." };
       }
       return null;
     },
@@ -201,11 +201,11 @@ const ENGINES = {
     },
     describe(status, detail) {
       if (status === 400 && /API[_ ]?key/i.test(detail)) {
-        return { message: "APIキーが正しくないようです。設定を確かめてください", showSettings: true };
+        return { message: "That API key looks wrong. Check the settings.", showSettings: true };
       }
       if (status === 403) {
         return {
-          message: "Google にAPIキーを拒まれました。Cloud Translation API が有効か、キーの制限を確かめてください",
+          message: "Google rejected the API key. Check that the Cloud Translation API is enabled and the key is not restricted.",
           showSettings: true,
         };
       }
@@ -226,33 +226,66 @@ function describeFailure(engine, err, settings) {
   const own = engine.describe ? engine.describe(status, detail, settings) : null;
   if (own) return own;
   if (status === 401 || status === 403) {
-    return { message: `${engine.label} にAPIキーを拒まれました。設定を確かめてください`, showSettings: true };
+    return { message: `${engine.label} rejected the API key. Check the settings.`, showSettings: true };
   }
   if (status === 429) {
-    return { message: `${engine.label} が混み合っているか、上限に当たりました。少し待ってからもう一度` };
+    return { message: `${engine.label} is busy or over its limit. Try again shortly.` };
   }
   if (status >= 500) {
-    return { message: `${engine.label} 側で不具合が起きています (${status})。少し待ってからもう一度` };
+    return { message: `${engine.label} is having trouble (${status}). Try again shortly.` };
   }
   if (err instanceof TypeError) {
     /* fetch が例外で落ちるのは、ほぼ回線かブロッカーの類 */
-    return { message: "ネットワークに繋がりませんでした" };
+    return { message: "Could not reach the network." };
   }
-  return { message: err?.message || "訳せませんでした" };
+  return { message: err?.message || "Could not translate." };
 }
 
 /* ------------------------------------------------------------------ *
- * 4. 一語だけ覚えておく
- *    読んでいる間、同じ語には何度も戻ってくる。語なら短いので、裏方が起きて
- *    いる間だけ覚えておけば呼ぶ回数がまとまって減る。文は同じ物を選び直す
- *    ことがまず無いうえ長いので、覚えない
+ * 4. いちど訳した物を覚えておく
+ *    語も文も覚える。読んでいる間に同じところへ戻ってくるのはもちろん、
+ *    PDFに線を引いたところの訳を、あとから出すのにも使う。
+ *    端末に残すので、Firefox を閉じても消えない。
  * ------------------------------------------------------------------ */
-const CACHE_MAX = 300;
-const cache = new Map();
+const CACHE_MAX = 500;      // 覚えておく数。古い物から落とす
+const CACHE_KEY = "memory"; // storage.local に置く場所
+const CACHE_TEXT_MAX = 400; // これより長い文は覚えない（場所を食うわりに戻らない）
+let cache = new Map();
+let cacheReady = null;
+let cacheWriteTimer = null;
 
-/* EnGoloyd が受け取れる形と同じ「英単語一語」だけを相手にする */
-function wordKey(text) {
-  return /^[A-Za-z][A-Za-z'-]*$/.test(text) ? text : "";
+/* 相手やモデルが変われば訳も変わる。覚えている分はそれごとに分ける */
+function cacheKey(settings, variant, text) {
+  const clean = String(text || "").trim();
+  if (!clean || clean.length > CACHE_TEXT_MAX) return "";
+  return `${settings.engine}\n${variant}\n${clean}`;
+}
+
+/* 端末に置いてある分を読み込む。入れ物は「鍵→訳」の並びで、
+   古い物が先、新しい物が後ろ */
+function loadCache() {
+  if (!cacheReady) {
+    cacheReady = browser.storage.local.get({ [CACHE_KEY]: [] })
+      .then((store) => {
+        const rows = Array.isArray(store[CACHE_KEY]) ? store[CACHE_KEY] : [];
+        cache = new Map(rows.filter((row) => Array.isArray(row) && row.length === 2));
+      })
+      .catch((err) => {
+        /* 読めなくても訳せなくなるわけではない。覚えが空のまま進む */
+        console.warn("覚えを読めませんでした:", err);
+        cache = new Map();
+      });
+  }
+  return cacheReady;
+}
+
+/* 一語ごとに書き込むと、読んでいる間じゅう書き続けることになる。少し待つ */
+function saveCacheSoon() {
+  clearTimeout(cacheWriteTimer);
+  cacheWriteTimer = setTimeout(() => {
+    browser.storage.local.set({ [CACHE_KEY]: [...cache.entries()] })
+      .catch((err) => console.warn("覚えを残せませんでした:", err));
+  }, 1000);
 }
 
 function cacheGet(key) {
@@ -266,7 +299,20 @@ function cacheGet(key) {
 
 function cacheSet(key, value) {
   cache.set(key, value);
-  if (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value);
+  while (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value);
+  saveCacheSoon();
+}
+
+/* 覚えている訳を尋ねられたときに返す。訳す相手は呼ばない。
+   PDFビューアが、線を引いたところの訳を出すのに使う */
+async function recall(text) {
+  await loadCache();
+  const settings = await loadSettings();
+  const engine = pickEngine(settings);
+  const key = cacheKey(settings, engine.variant(settings), text);
+  const hit = key && cacheGet(key);
+  return hit ? { ok: true, translation: hit, cached: true, via: engine.variant(settings) || engine.label }
+             : { ok: false };
 }
 
 async function translate(text) {
@@ -274,14 +320,13 @@ async function translate(text) {
   const engine = pickEngine(settings);
   const apiKey = String(settings[engine.keyField] || "").trim();
   if (!apiKey) {
-    return { ok: false, message: `${engine.label} のAPIキーがまだ入っていません`, showSettings: true };
+    return { ok: false, message: `No API key for ${engine.label} yet.`, showSettings: true };
   }
 
   const variant = engine.variant(settings);
   const via = variant || engine.label;
-  /* 相手やモデルが変われば訳も変わる。覚えている分はそれごとに分ける */
-  const word = wordKey(text.trim());
-  const key = word && `${settings.engine}\n${variant}\n${word}`;
+  await loadCache();
+  const key = cacheKey(settings, variant, text);
   if (key) {
     const hit = cacheGet(key);
     if (hit) return { ok: true, translation: hit, cached: true, via };
@@ -323,16 +368,16 @@ async function listModels() {
    しておく。「開く」と「保存」の二つから使う */
 async function engoloydUrl(param, value) {
   const clean = String(value || "").trim();
-  if (!clean) return { ok: false, message: "渡す中身が空でした" };
+  if (!clean) return { ok: false, message: "Nothing to send." };
   const settings = await loadSettings();
   let url;
   try {
     url = new URL((settings.engoloydUrl || SETTINGS_DEFAULTS.engoloydUrl).trim());
   } catch {
-    return { ok: false, message: "EnGoloyd の場所が正しくありません。設定を確かめてください", showSettings: true };
+    return { ok: false, message: "The EnGoloyd address is not valid. Check the settings.", showSettings: true };
   }
   if (url.protocol !== "https:" && url.protocol !== "http:") {
-    return { ok: false, message: "EnGoloyd の場所は http(s) で書いてください", showSettings: true };
+    return { ok: false, message: "The EnGoloyd address must start with http(s).", showSettings: true };
   }
   url.searchParams.set(param, clean);
   return { ok: true, url: url.toString() };
@@ -380,6 +425,8 @@ browser.runtime.onMessage.addListener((msg) => {
       return translate(String(msg.text || ""));
     case "models":
       return listModels();
+    case "recall":
+      return recall(msg.text);
     case "open-engoloyd":
       return openEngoloyd(msg.word);
     case "save-engoloyd":

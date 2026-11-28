@@ -1,8 +1,8 @@
 {
   "manifest_version": 2,
   "name": "Cursor Translator",
-  "version": "1.26.0",
-  "description": "ページの英文をマウスで選ぶと、その場に日本語訳を出す。訳は Gemini・DeepL・Google翻訳から選べる",
+  "version": "1.27.0",
+  "description": "Select English on a page and the Japanese appears right there. Translate with Gemini, DeepL or Google Translate.",
   "browser_specific_settings": {
     "gecko": {
       "id": "select-to-ja@engoloyd",

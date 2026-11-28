@@ -109,18 +109,18 @@ function make(tag, props = {}, ...children) {
 
 function buildBubble() {
   const parts = {
-    x: make("button", { className: "x", type: "button", title: "閉じる", textContent: "×", "aria-label": "閉じる" }),
+    x: make("button", { className: "x", type: "button", title: "Close", textContent: "×", "aria-label": "Close" }),
     body: make("div", { className: "body" }),
-    ask: make("button", { className: "act ask", type: "button", textContent: "訳す", hidden: true }),
+    ask: make("button", { className: "act ask", type: "button", textContent: "translate", hidden: true }),
     engoloyd: make("button", {
-      className: "act engoloyd", type: "button", textContent: "開く",
-      title: "EnGoloyd で開いて、いま接辞に分解する", hidden: true,
+      className: "act engoloyd", type: "button", textContent: "open",
+      title: "Open in EnGoloyd and break it into affixes now", hidden: true,
     }),
     save: make("button", {
-      className: "act save", type: "button", textContent: "保存",
-      title: "EnGoloyd の「まとめて登録」へ積む。いまは分解しない", hidden: true,
+      className: "act save", type: "button", textContent: "save",
+      title: "Queue it in EnGoloyd for later; nothing is generated now", hidden: true,
     }),
-    settings: make("button", { className: "act settings", type: "button", textContent: "設定を開く", hidden: true }),
+    settings: make("button", { className: "act settings", type: "button", textContent: "settings", hidden: true }),
     note: make("span", { className: "note" }),
   };
   parts.foot = make("div", { className: "foot" }, parts.ask, parts.engoloyd, parts.save, parts.settings, parts.note);
@@ -230,11 +230,11 @@ function ensureUI() {
     const done = await browser.runtime.sendMessage({ type: "save-engoloyd", text });
     ui.save.disabled = false;
     if (done && done.ok) {
-      ui.save.textContent = "積んだ";
+      ui.save.textContent = "queued";
       ui.save.disabled = true;
     } else {
       /* 添え字の行を借りて理由を出す。訳そのものは消さない */
-      ui.note.textContent = (done && done.message) || "保存できませんでした";
+      ui.note.textContent = (done && done.message) || "Could not save.";
     }
   });
 
@@ -442,7 +442,7 @@ function render({ kind, message = "", note = "" }) {
   ui.body.classList.toggle("wait", kind === "loading" || kind === "ask");
 
   if (kind === "loading") {
-    ui.body.textContent = "訳しています…";
+    ui.body.textContent = "translating…";
   } else {
     ui.body.textContent = kind === "ok" ? translation : message;
   }
@@ -453,7 +453,7 @@ function render({ kind, message = "", note = "" }) {
   /* 「保存」は文でも出す。向こうの「まとめて登録」が、文からでも英単語だけを
      拾ってくれるため。押す前の姿に戻しておく（前に押した札が残らないように） */
   ui.save.hidden = !shownText;
-  ui.save.textContent = "保存";
+  ui.save.textContent = "save";
   ui.save.disabled = false;
   ui.settings.hidden = !(kind === "error" && showSettingsFlag);
   ui.foot.hidden = ui.ask.hidden && ui.engoloyd.hidden && ui.save.hidden
@@ -498,7 +498,7 @@ async function startTranslate(text, { wait = 0 } = {}) {
   try {
     res = await browser.runtime.sendMessage({ type: "translate", text });
   } catch {
-    res = { ok: false, message: "拡張機能の裏側と話せませんでした。Firefoxを開き直してください" };
+    res = { ok: false, message: "Could not reach the extension. Try restarting Firefox." };
   }
   if (mine !== seq) return;
 
@@ -507,7 +507,7 @@ async function startTranslate(text, { wait = 0 } = {}) {
     render({ kind: "ok", note: res.via || "" });
   } else {
     showSettingsFlag = Boolean(res && res.showSettings);
-    render({ kind: "error", message: (res && res.message) || "訳せませんでした" });
+    render({ kind: "error", message: (res && res.message) || "Could not translate." });
   }
 }
 
@@ -601,6 +601,33 @@ function onDwell(point) {
    渡せる。普通のページでは別の所で動くが、そこにはビューアが居ないので
    尋ねられることもない。
    これが唯一の繋ぎ目なので、消すなら向こうの右クリックも一緒に外すこと */
+/* 同梱のPDFビューアから「ここにこの訳を出して」と頼まれる。線を引いたところへ
+   カーソルが触れたときに使う。訳はもう分かっているので、訳す相手は呼ばない。
+   出した吹き出しは、カーソルで出した物と同じ扱いにする（離れれば引っ込む） */
+document.addEventListener("engoloyd-show", (event) => {
+  const detail = event.detail;
+  if (!detail || !detail.text || !detail.translation || !detail.rect) return;
+  if (!settings.enabled) return;
+  const box = detail.rect;
+  /* 選んで出した吹き出しが出ているなら、そちらを立てる */
+  if (ui && !ui.bubble.hidden && !hoverSource) return;
+  if (hoverSource && shownText === detail.text && ui && !ui.bubble.hidden) return;
+
+  seq += 1;
+  hoverSource = true;
+  hoverRange = null;
+  anchor = {
+    text: detail.text,
+    rectOf: () => box,
+    pointOf: () => aimPoint(box),
+  };
+  shownText = detail.text;
+  shownWord = wordOf(detail.text);
+  translation = detail.translation;
+  showSettingsFlag = false;
+  render({ kind: "ok", note: detail.via || "" });
+});
+
 document.addEventListener("engoloyd-hover-word", (event) => {
   if (!event.detail || !hoverSource || !hoverRange) return;
   if (!ui || ui.bubble.hidden) return;
@@ -645,7 +672,7 @@ function handleSelection(target) {
 
   if (text.length > MAX_CHARS) {
     seq += 1;
-    render({ kind: "error", message: `選んだ範囲が長すぎます（${MAX_CHARS}字まで）` });
+    render({ kind: "error", message: `Selection is too long (up to ${MAX_CHARS} characters).` });
     return;
   }
   if (settings.trigger === "button") {
