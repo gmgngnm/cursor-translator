@@ -13,7 +13,9 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = "vendor/pdf.worker.min.mjs";
 
 const el = {};
 for (const id of ["open", "file", "name", "marker", "color", "page", "scale", "in", "out",
-                  "save", "state", "note", "viewerContainer", "editor", "text", "apply", "drop", "close"]) {
+                  "save", "note", "viewerContainer", "editor", "text", "apply", "drop", "close",
+                  "vocab", "vocabulary", "vocab-list", "vocab-count", "vocab-empty", "vocab-close"]) {
+  /* vocab-list のような名前は、使うときに el["vocab-list"] と書く */
   el[id] = document.getElementById(id);
 }
 
@@ -122,10 +124,18 @@ function say(message, bad = false) {
   el.note.classList.toggle("bad", Boolean(message) && bad);
 }
 
+/* 未保存かどうかは、ファイル名のうしろの * で示す。札を別に置くと場所を取る */
+function showName() {
+  el.name.textContent = fileName ? `${fileName}${dirty ? " *" : ""}` : "";
+  el.name.classList.toggle("dirty", dirty);
+  document.title = fileName
+    ? `${dirty ? "*" : ""}${fileName} — Cursor Translator`
+    : "Cursor Translator — PDF";
+}
+
 function setDirty(value) {
   dirty = value;
-  el.state.textContent = value ? "未保存の変更あり" : "";
-  el.state.classList.toggle("dirty", value);
+  showName();
 }
 
 /* ------------------------------------------------------------------ *
@@ -153,11 +163,12 @@ function remember() {
 /* 変えた後に呼ぶ。保存したときの姿と同じなら、未保存ではない */
 function touched() {
   setDirty(stamp() !== savedState);
+  drawVocab();
 }
 
 function undo() {
   if (!history.length) {
-    say("戻せるものはありません");
+    say("Nothing to undo.");
     return;
   }
   marks = JSON.parse(history.pop());
@@ -175,12 +186,12 @@ function undo() {
 async function show(bytes, label, handle = null) {
   say("");
   fileName = label;
+  dirty = false;
   picked = null;
   saveHandle = handle;
   hideEditor();
   setDirty(false);
-  el.name.textContent = label;
-  document.title = `${label} — Cursor Translator`;
+  showName();
   /* 前にこのPDFへ引いた線は、注釈として入っている。剥がしてこちらの持ち物に
      移すと、そのまま消したり覚え書きを書き直したりできる */
   const taken = await takeMarksOut(bytes);
@@ -190,7 +201,8 @@ async function show(bytes, label, handle = null) {
   /* 開いた時点の姿を、未保存かどうかの基準にする。戻す手数も持ち越さない */
   savedState = stamp();
   history.length = 0;
-  if (taken.found.length) say(`前に引いた線を ${taken.found.length} 本読み込みました`);
+  drawVocab();
+  if (taken.found.length) say(`Loaded ${taken.found.length} highlight${taken.found.length > 1 ? "s" : ""}.`);
   try {
     /* pdf.js は渡した配列を自分の物として使ってしまう（中身が空になる）。
        保存のときに元の姿が要るので、写しを渡す */
@@ -200,7 +212,7 @@ async function show(bytes, label, handle = null) {
     linkService.setDocument(doc, null);
   } catch (err) {
     console.warn("PDFを開けませんでした:", err);
-    say(`開けませんでした: ${err && err.message ? err.message : err}`, true);
+    say(`Could not open: ${err && err.message ? err.message : err}`, true);
   }
 }
 
@@ -212,7 +224,7 @@ async function openUrl(url) {
     const bytes = new Uint8Array(await res.arrayBuffer());
     show(bytes, decodeURIComponent((url.split("/").pop() || "download").split("?")[0]));
   } catch (err) {
-    say(`取りに行けませんでした: ${err && err.message ? err.message : err}`, true);
+    say(`Could not fetch: ${err && err.message ? err.message : err}`, true);
   }
 }
 
@@ -312,8 +324,13 @@ function marksFromRange(range) {
       w: Math.abs(x2 - x1), h: Math.abs(y2 - y1),
     });
   }
+  /* 元の文字列も持っておく。あとでカーソルを乗せたときに、覚えてある訳を
+     引くのに使う。行をまたいだときの繋ぎ方は、訳すときと同じ手で揃える */
+  /* 行の継ぎ目の繋ぎ方は content.js の物に合わせる（同じ所で動いている）。
+     読み込みの順で居なければ、素の文字列で我慢する */
+  const text = typeof textOfRange === "function" ? textOfRange(range) : range.toString();
   return [...made.entries()].map(([page, rects]) => ({
-    id: nextId++, page, rects, color: el.color.value, note: "",
+    id: nextId++, page, rects, color: el.color.value, note: "", text,
   }));
 }
 
@@ -368,7 +385,7 @@ function drawMarks() {
    動きを止める（焦点が移らなければ選択はそのまま残る） */
 el.marker.addEventListener("mousedown", (event) => event.preventDefault());
 el.marker.addEventListener("click", () => {
-  if (!applyMarker()) say("先に、線を引きたいところを選んでください");
+  if (!applyMarker()) say("Select some text first.");
 });
 
 /* 渡されたところに線を引く。何も渡さなければ、いま選んでいるところ。
@@ -405,6 +422,48 @@ document.addEventListener("contextmenu", (event) => {
   if (!asked.range) return;
   if (!applyMarker(asked.range)) return;
   event.preventDefault();
+});
+
+/* ------------------------------------------------------------------ *
+ * 線に触れたら、覚えてある訳を出す
+ *
+ * ハイライト翻訳が入っていれば、カーソルタッチ翻訳の入切に関わらず出す。
+ * いちど引いた線は「もう訳した物」なので、読み返すたびに訳を待たされたり、
+ * 訳す相手を呼び直したりするのは無駄。覚えてある分だけを出す
+ * ------------------------------------------------------------------ */
+let hoveredMark = 0;
+
+function markAt(x, y) {
+  const box = document.elementsFromPoint(x, y)
+    .find((node) => node.classList && node.classList.contains("mark"));
+  if (!box) return null;
+  return marks.find((m) => m.id === Number(box.dataset.id)) || null;
+}
+
+document.addEventListener("mousemove", async (event) => {
+  if (!el.viewerContainer.contains(event.target)) return;
+  const mark = markAt(event.clientX, event.clientY);
+  if (!mark || !mark.text) {
+    hoveredMark = 0;
+    return;
+  }
+  if (hoveredMark === mark.id) return;      // 同じ線の上を動いているだけ
+  hoveredMark = mark.id;
+  const settings = await loadSettings();
+  if (!settings.enabled) return;            // ハイライト翻訳が切ってある
+  let res;
+  try {
+    res = await browser.runtime.sendMessage({ type: "recall", text: mark.text });
+  } catch {
+    return;
+  }
+  if (!res || !res.ok) return;              // まだ訳していない語。黙っている
+  if (hoveredMark !== mark.id) return;      // 待っている間に離れた
+  const box = document.querySelector(`.markLayer .mark[data-id="${mark.id}"]`);
+  if (!box) return;
+  document.dispatchEvent(new CustomEvent("engoloyd-show", {
+    detail: { text: mark.text, translation: res.translation, via: res.via, rect: box.getBoundingClientRect() },
+  }));
 });
 
 /* 線は字の層の下に敷いてあるので、押して当たるのは字の方。押した点の真下まで
@@ -451,6 +510,98 @@ el.drop.addEventListener("click", () => {
   touched();
 });
 el.close.addEventListener("click", hideEditor);
+
+/* ------------------------------------------------------------------ *
+ * vocabulary（引いた線の一覧）
+ *
+ * 右から出す。読み終わったあとに、拾った語をまとめて見返すためのもの。
+ * 訳は覚えてある分だけを出す。ここを開いたせいで訳す相手を呼ぶことはない
+ * ------------------------------------------------------------------ */
+function vocabOpen() {
+  return !el.vocabulary.hidden;
+}
+
+async function drawVocab() {
+  if (!vocabOpen()) return;
+  const list = el["vocab-list"];
+  const rows = [];
+  /* 引いた順ではなく、紙に並んでいる順で出す。読み返すときはその方が追える */
+  const ordered = [...marks].sort((a, b) => {
+    if (a.page !== b.page) return a.page - b.page;
+    /* PDFの縦は下が0なので、上にある物ほど値が大きい */
+    return (b.rects[0] ? b.rects[0].y : 0) - (a.rects[0] ? a.rects[0].y : 0);
+  });
+  for (const mark of ordered) {
+    const row = document.createElement("li");
+    row.className = "pdfside-row";
+    row.dataset.id = String(mark.id);
+
+    const swatch = document.createElement("span");
+    swatch.className = "pdfside-dot";
+    swatch.style.background = mark.color;
+
+    const body = document.createElement("div");
+    body.className = "pdfside-body";
+
+    const head = document.createElement("b");
+    head.className = "pdfside-text";
+    head.textContent = mark.text || "(no text)";
+    body.append(head);
+
+    /* 訳は覚えてある分だけ。まだ訳していなければ何も出さない */
+    let said = "";
+    if (mark.text) {
+      try {
+        const res = await browser.runtime.sendMessage({ type: "recall", text: mark.text });
+        if (res && res.ok) said = res.translation;
+      } catch { /* 裏方と話せなくても一覧は出す */ }
+    }
+    if (said) {
+      const line = document.createElement("div");
+      line.className = "pdfside-said";
+      line.textContent = said;
+      body.append(line);
+    }
+    if (mark.note) {
+      const line = document.createElement("div");
+      line.className = "pdfside-note";
+      line.textContent = mark.note;
+      body.append(line);
+    }
+
+    const page = document.createElement("span");
+    page.className = "pdfside-page";
+    page.textContent = `p.${mark.page}`;
+
+    row.append(swatch, body, page);
+    rows.push(row);
+  }
+  list.replaceChildren(...rows);
+  el["vocab-count"].textContent = marks.length ? String(marks.length) : "";
+  el["vocab-empty"].hidden = marks.length > 0;
+}
+
+function toggleVocab(open) {
+  const want = open === undefined ? !vocabOpen() : open;
+  el.vocabulary.hidden = !want;
+  el.vocab.setAttribute("aria-expanded", String(want));
+  document.body.classList.toggle("with-side", want);
+  if (want) drawVocab();
+}
+
+el.vocab.addEventListener("click", () => toggleVocab());
+el["vocab-close"].addEventListener("click", () => toggleVocab(false));
+
+/* 押したらその線まで連れて行く */
+el["vocab-list"].addEventListener("click", (event) => {
+  const row = event.target.closest(".pdfside-row");
+  if (!row) return;
+  const mark = marks.find((m) => m.id === Number(row.dataset.id));
+  if (!mark) return;
+  viewer.currentPageNumber = mark.page;
+  const box = document.querySelector(`.markLayer .mark[data-id="${mark.id}"]`);
+  if (box) box.scrollIntoView({ block: "center" });
+});
 
 /* ------------------------------------------------------------------ *
  * 保存と読み戻し
@@ -511,6 +662,10 @@ function markToAnnot(doc, mark, lib) {
     F: 4,
     T: PDFHexString.fromText(MINE),
     Contents: PDFHexString.fromText(mark.note || ""),
+    /* 線を引いた元の文字列。PDFの決まりには無い項だが、知らない項は
+       読み飛ばす決まりなので、他の道具の邪魔にはならない。
+       これが無いと、開き直したあとに訳を引く手がかりが無くなる */
+    Subj: PDFHexString.fromText(mark.text || ""),
     AP: { N: doc.context.register(form) },
   });
 }
@@ -549,10 +704,12 @@ function annotToMark(doc, dict, pageNumber, lib) {
   if (!rects.length) return null;
   const color = entry(doc, dict, "C", lib);
   const note = entry(doc, dict, "Contents", lib);
+  const text = entry(doc, dict, "Subj", lib);
   return {
     id: nextId++,
     page: pageNumber,
     rects,
+    text: text && typeof text.decodeText === "function" ? text.decodeText() : "",
     color: color && color.asArray
       ? toHex(color.asArray().map((n) => doc.context.lookup(n)).map((n) => n.asNumber()))
       : el.color.value,
@@ -649,7 +806,7 @@ async function save(quiet = false) {
     if (!quiet) say("");
   } catch (err) {
     console.warn("保存できませんでした:", err);
-    say(`保存できませんでした: ${err && err.message ? err.message : err}`, true);
+    say(`Could not save: ${err && err.message ? err.message : err}`, true);
   }
 }
 

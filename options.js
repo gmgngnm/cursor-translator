@@ -57,7 +57,7 @@ async function flushSave() {
   const values = pending;
   pending = {};
   await browser.storage.local.set(values);
-  say("保存しました");
+  say("Saved.");
 }
 
 /* 決め方をそのまま見本に当てる。吹き出しは読んでいるページの上にしか出ない
@@ -150,7 +150,7 @@ for (const button of document.querySelectorAll(".peek")) {
     const input = document.getElementById(button.dataset.for);
     const hidden = input.type === "password";
     input.type = hidden ? "text" : "password";
-    button.textContent = hidden ? "隠す" : "表示";
+    button.textContent = hidden ? "hide" : "show";
   });
 }
 

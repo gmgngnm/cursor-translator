@@ -20,7 +20,7 @@ let settings = { ...SETTINGS_DEFAULTS };
 function showKeyState() {
   const info = engineInfo(el.engine.value);
   const has = String(settings[info.keyField] || "").trim();
-  el.note.textContent = has ? "" : `${info.label} のAPIキーが未設定。歯車から入れてください`;
+  el.note.textContent = has ? "" : `No API key for ${info.label}. Add one from the gear.`;
   el.note.classList.toggle("bad", !has);
 }
 
@@ -52,7 +52,7 @@ async function init() {
 
   const tab = await currentTab();
   if (tab && isPdfUrl(tab.url)) {
-    el.pdf.textContent = "このPDFをここで開く";
+    el.pdf.textContent = "open this PDF here";
     el.pdf.dataset.url = tab.url;
   }
 }

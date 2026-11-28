@@ -10,6 +10,40 @@ body.pdfpage{margin:0; padding:0; overflow:hidden; background:var(--box);}
 }
 .pdfbar b{color:var(--title);}
 .pdfname{flex:1; min-width:40px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--soft); font-size:11px;}
+/* 未保存のときだけ、名前を目立たせる（うしろに * が付く） */
+.pdfname.dirty{color:var(--danger);}
+
+/* 引いた線の一覧。右から出す */
+.pdfside{
+  position:fixed; inset:31px 0 0 auto; z-index:4;
+  width:300px; display:flex; flex-direction:column;
+  background:var(--bg); border-left:1px solid var(--line);
+  font-size:12px; overflow:hidden;
+}
+.pdfside[hidden]{display:none;}
+/* 開いている間は紙の側を詰めて、線と一覧が重ならないようにする */
+body.with-side #viewerContainer{right:300px;}
+.pdfside-head{
+  display:flex; align-items:center; gap:6px;
+  padding:5px 8px; border-bottom:1px solid var(--line);
+}
+.pdfside-head b{color:var(--title);}
+.pdfside-head .val{flex:1; color:var(--soft); font-weight:normal;}
+.pdfside-list{margin:0; padding:0; list-style:none; overflow:auto; flex:1;}
+.pdfside-row{
+  display:flex; align-items:flex-start; gap:6px;
+  padding:6px 8px; border-bottom:1px solid var(--line); cursor:pointer;
+}
+.pdfside-row:hover{background:var(--box);}
+.pdfside-dot{flex:none; width:10px; height:10px; margin-top:3px; border:1px solid var(--line);}
+.pdfside-body{flex:1; min-width:0;}
+.pdfside-text{display:block; color:var(--ink); word-break:break-word;}
+.pdfside-said{color:var(--soft); margin-top:2px; word-break:break-word;}
+/* 覚え書きは自分で書いた物なので、拾った訳とは分けて見せる */
+.pdfside-note{margin-top:2px; padding-left:5px; border-left:2px solid var(--line); color:var(--soft);}
+.pdfside-page{flex:none; color:var(--soft); font-size:11px;}
+.pdfside-empty{margin:0; padding:10px 8px; color:var(--soft);}
+.pdfside-empty[hidden]{display:none;}
 .pdfzoom{display:flex; align-items:center; gap:4px;}
 .pdfzoom .val{min-width:3.4em; text-align:center;}
 #state{min-width:7em; color:var(--soft); font-weight:normal;}

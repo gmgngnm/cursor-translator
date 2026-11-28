@@ -59,28 +59,28 @@ const SETTINGS_DEFAULTS = {
 const ENGINES_INFO = [
   { id: "gemini", label: "Gemini", keyField: "apiKey", inputId: "api-key" },
   { id: "deepl", label: "DeepL", keyField: "deeplKey", inputId: "deepl-key" },
-  { id: "google", label: "Google翻訳", keyField: "googleKey", inputId: "google-key" },
+  { id: "google", label: "Google Translate", keyField: "googleKey", inputId: "google-key" },
 ];
 
 /* 色味の選択肢。掲示板の配色に寄せた四色 */
 const ACCENTS = [
-  { id: "blue", label: "青" },
-  { id: "orange", label: "橙" },
-  { id: "green", label: "緑" },
-  { id: "gray", label: "灰" },
+  { id: "blue", label: "blue" },
+  { id: "orange", label: "orange" },
+  { id: "green", label: "green" },
+  { id: "gray", label: "grey" },
 ];
 
 const AUTO_SAVES = [
-  { id: "0", label: "しない" },
-  { id: "30", label: "30秒ごと" },
-  { id: "60", label: "1分ごと" },
-  { id: "300", label: "5分ごと" },
+  { id: "0", label: "off" },
+  { id: "30", label: "every 30 seconds" },
+  { id: "60", label: "every minute" },
+  { id: "300", label: "every 5 minutes" },
 ];
 
 const THEMES = [
-  { id: "auto", label: "自動（端末に合わせる）" },
-  { id: "light", label: "明るい" },
-  { id: "dark", label: "暗い" },
+  { id: "auto", label: "automatic (follow the system)" },
+  { id: "light", label: "light" },
+  { id: "dark", label: "dark" },
 ];
 
 function fillSelect(select, items, value) {
@@ -109,8 +109,8 @@ const HOVER_DELAY_STEP = 100;
 
 function delayLabel(ms) {
   const value = Number(ms);
-  if (!Number.isFinite(value) || value <= 0) return "すぐ";
-  return `${(value / 1000).toFixed(1)}秒`;
+  if (!Number.isFinite(value) || value <= 0) return "none";
+  return `${(value / 1000).toFixed(1)}s`;
 }
 
 function fillDelayBar(bar, value) {
