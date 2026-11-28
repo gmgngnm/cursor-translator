@@ -418,13 +418,15 @@ document.addEventListener("contextmenu", (event) => {
     if (applyMarker()) event.preventDefault();
     return;
   }
-  /* 何も選んでいないときは、カーソルタッチ翻訳がいま出している語に引く。
-     読みながら、知らない語をその場で拾っていけるように。
-     どの語かは content.js に尋ねる（出ていなければ何も返らない） */
-  const asked = { word: "", range: null, x: event.clientX, y: event.clientY };
-  document.dispatchEvent(new CustomEvent("engoloyd-hover-word", { detail: asked }));
-  if (!asked.range) return;
-  if (!applyMarker(asked.range)) return;
+  /* 何も選んでいないときは、**カーソルの下の語**に引く。読みながら、知らない語を
+     その場で拾っていけるように。
+     前は「いま吹き出しを出している語」を content.js に尋ねていたが、吹き出しが
+     出ているかどうかで結果が変わり、当てにならなかった（出ているのに引けない、
+     という目に遭う）。同じ所で動いているので、語を探す手を直に呼ぶ。
+     余白や絵の上では何も返らないので、そこはいつもの献立がそのまま出る */
+  const found = typeof wordAtPoint === "function" ? wordAtPoint(event.clientX, event.clientY) : null;
+  if (!found || !found.range) return;
+  if (!applyMarker(found.range)) return;
   event.preventDefault();
 });
 
