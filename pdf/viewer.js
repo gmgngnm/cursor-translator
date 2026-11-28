@@ -325,7 +325,20 @@ function drawMarks() {
     if (!layer) {
       layer = document.createElement("div");
       layer.className = "markLayer";
-      /* 字の層より先に置く。後ろに置くと字を選べなくなる */
+    }
+    /* **置き場所は毎回決め直す。**
+       紙(canvas)より前に来ると、不透明な紙に隠れて線が見えなくなる。それでも
+       押せてしまう（押す先は重なりを貫いて探すため）ので、「当たり判定はあるのに
+       見えない」という分かりにくい姿になる。
+       pdf.js は描き直すたびに自分の層を足し直すので、いちど置いた場所に留まって
+       くれない。紙のすぐ後ろに置き直して、紙より上・字の層より下を保つ。
+       z-index では上げない。付けると層が独立して下の紙と混ざらなくなり、
+       蛍光ペンのつもりが字を塗りつぶす */
+    const paper = view.div.querySelector(".canvasWrapper");
+    if (paper) {
+      if (layer.previousElementSibling !== paper) paper.after(layer);
+    } else if (layer.parentElement !== view.div) {
+      /* 紙がまだ無いうちは先頭でよい。次に描くときに置き直される */
       view.div.prepend(layer);
     }
     const boxes = [];
