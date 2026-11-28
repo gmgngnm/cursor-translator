@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Cursor Translator",
-  "version": "1.28.0",
+  "version": "1.29.0",
   "description": "Select English on a page and the Japanese appears right there. Translate with Gemini, DeepL or Google Translate.",
   "browser_specific_settings": {
     "gecko": {

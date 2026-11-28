@@ -638,6 +638,12 @@ document.addEventListener("engoloyd-show", (event) => {
   startTranslate(detail.text);
 });
 
+/* 同梱のPDFビューアから「いま出している物を引っ込めて」と頼まれる。
+   線から離れた瞬間に消すため。選んで出した吹き出しには手を出さない */
+document.addEventListener("engoloyd-hide", () => {
+  if (hoverSource) hide();
+});
+
 document.addEventListener("engoloyd-hover-word", (event) => {
   const detail = event.detail;
   if (!detail || !hoverSource) return;
