@@ -14,7 +14,8 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = "vendor/pdf.worker.min.mjs";
 const el = {};
 for (const id of ["open", "file", "name", "marker", "color", "page", "scale", "in", "out",
                   "save", "note", "viewerContainer", "editor", "text", "apply", "drop", "close",
-                  "vocab", "vocabulary", "vocab-list", "vocab-count", "vocab-empty", "vocab-close"]) {
+                  "vocab", "vocabulary", "vocab-list", "vocab-count", "vocab-empty", "vocab-close",
+                  "note-text", "note-close"]) {
   /* vocab-list のような名前は、使うときに el["vocab-list"] と書く */
   el[id] = document.getElementById(id);
 }
@@ -119,9 +120,12 @@ async function rememberedPage(label) {
   }
 }
 
+/* 添え字の一行。困りごと（bad）は赤く、ただの知らせは控えめに出す。
+   読み終わったら × で消せる。出しっぱなしだと紙が狭いままになる */
 function say(message, bad = false) {
-  el.note.textContent = message || "";
+  el["note-text"].textContent = message || "";
   el.note.classList.toggle("bad", Boolean(message) && bad);
+  el.note.hidden = !message;
 }
 
 /* 未保存かどうかは、ファイル名のうしろの * で示す。札を別に置くと場所を取る */
@@ -417,7 +421,7 @@ document.addEventListener("contextmenu", (event) => {
   /* 何も選んでいないときは、カーソルタッチ翻訳がいま出している語に引く。
      読みながら、知らない語をその場で拾っていけるように。
      どの語かは content.js に尋ねる（出ていなければ何も返らない） */
-  const asked = { word: "", range: null };
+  const asked = { word: "", range: null, x: event.clientX, y: event.clientY };
   document.dispatchEvent(new CustomEvent("engoloyd-hover-word", { detail: asked }));
   if (!asked.range) return;
   if (!applyMarker(asked.range)) return;
@@ -455,14 +459,21 @@ document.addEventListener("mousemove", async (event) => {
   try {
     res = await browser.runtime.sendMessage({ type: "recall", text: mark.text });
   } catch {
-    return;
+    res = null;
   }
-  if (!res || !res.ok) return;              // まだ訳していない語。黙っている
   if (hoveredMark !== mark.id) return;      // 待っている間に離れた
   const box = document.querySelector(`.markLayer .mark[data-id="${mark.id}"]`);
   if (!box) return;
+  /* 覚えていればそれを出す。まだ訳していなければ訳しに行かせる。
+     どちらにしても待ち時間は掛けない（線を引いたのは利用者がそこを選んだ
+     ということなので、読み流しと同じに扱わない） */
   document.dispatchEvent(new CustomEvent("engoloyd-show", {
-    detail: { text: mark.text, translation: res.translation, via: res.via, rect: box.getBoundingClientRect() },
+    detail: {
+      text: mark.text,
+      translation: res && res.ok ? res.translation : "",
+      via: res && res.ok ? res.via : "",
+      rect: box.getBoundingClientRect(),
+    },
   }));
 });
 
@@ -588,6 +599,8 @@ function toggleVocab(open) {
   document.body.classList.toggle("with-side", want);
   if (want) drawVocab();
 }
+
+el["note-close"].addEventListener("click", () => say(""));
 
 el.vocab.addEventListener("click", () => toggleVocab());
 el["vocab-close"].addEventListener("click", () => toggleVocab(false));
@@ -823,7 +836,10 @@ document.addEventListener("keydown", (event) => {
     event.preventDefault();
     undo();
   }
-  if (event.key === "Escape" && !el.editor.hidden) hideEditor();
+  if (event.key === "Escape") {
+    if (!el.editor.hidden) hideEditor();
+    else if (!el.note.hidden) say("");   /* 知らせも Escape で消せる */
+  }
 });
 
 /* 書いたものを捨てて閉じようとしたら引き止める */

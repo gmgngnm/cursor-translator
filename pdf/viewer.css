@@ -52,10 +52,14 @@ body.with-side #viewerContainer{right:300px;}
   position:fixed; inset:31px 0 auto 0; z-index:3; margin:0;
   padding:4px 8px; background:var(--box); border-bottom:1px solid var(--line);
   color:var(--soft); font-size:11px;
+  display:flex; align-items:center; gap:8px;
 }
 /* 困りごとだけ赤くする。知らせまで赤いと、どれが困りごとか分からなくなる */
 .pdfnote.bad{color:var(--danger);}
-.pdfnote:empty{display:none;}
+.pdfnote[hidden]{display:none;}
+#note-text{flex:1; min-width:0;}
+/* 消す釦は右端に */
+#note-close{flex:none; padding:0 5px; line-height:1.2;}
 #viewerContainer{
   position:absolute; inset:31px 0 0 0;
   overflow:auto; background:var(--box);

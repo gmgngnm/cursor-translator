@@ -606,7 +606,7 @@ function onDwell(point) {
    出した吹き出しは、カーソルで出した物と同じ扱いにする（離れれば引っ込む） */
 document.addEventListener("engoloyd-show", (event) => {
   const detail = event.detail;
-  if (!detail || !detail.text || !detail.translation || !detail.rect) return;
+  if (!detail || !detail.text || !detail.rect) return;
   if (!settings.enabled) return;
   const box = detail.rect;
   /* 選んで出した吹き出しが出ているなら、そちらを立てる */
@@ -616,6 +616,9 @@ document.addEventListener("engoloyd-show", (event) => {
   seq += 1;
   hoverSource = true;
   hoverRange = null;
+  /* 線を引いたところへカーソルが来ている間は、こちらの待ち時間は動かさない。
+     待ってから出し直されると、出ている訳が一度消えて瞬く */
+  clearHoverTimers();
   anchor = {
     text: detail.text,
     rectOf: () => box,
@@ -623,16 +626,35 @@ document.addEventListener("engoloyd-show", (event) => {
   };
   shownText = detail.text;
   shownWord = wordOf(detail.text);
-  translation = detail.translation;
   showSettingsFlag = false;
-  render({ kind: "ok", note: detail.via || "" });
+  if (detail.translation) {
+    translation = detail.translation;
+    render({ kind: "ok", note: detail.via || "" });
+    return;
+  }
+  /* まだ訳していないところ。**待たずに**訳しに行く。線を引いたのは利用者が
+     そこを選んだということなので、カーソルタッチ翻訳の待ち時間は掛けない */
+  translation = "";
+  startTranslate(detail.text);
 });
 
 document.addEventListener("engoloyd-hover-word", (event) => {
-  if (!event.detail || !hoverSource || !hoverRange) return;
+  const detail = event.detail;
+  if (!detail || !hoverSource) return;
   if (!ui || ui.bubble.hidden) return;
-  event.detail.word = shownWord;
-  event.detail.range = hoverRange;
+  if (hoverRange) {
+    detail.word = shownWord;
+    detail.range = hoverRange;
+    return;
+  }
+  /* 範囲を持っていないことがある（線の訳を出しているときなど）。
+     位置を渡されていれば、カーソルの下の語を見直して拾う。
+     こうしないと、すでに線のあるところに乗った語を引けなくなる */
+  if (!Number.isFinite(detail.x) || !Number.isFinite(detail.y)) return;
+  const found = wordAtPoint(detail.x, detail.y);
+  if (!found) return;
+  detail.word = found.word;
+  detail.range = found.range;
 });
 
 /* ------------------------------------------------------------------ *
