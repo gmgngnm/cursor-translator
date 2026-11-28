@@ -152,9 +152,6 @@ let placeQueued = false;
 /* いま出ている吹き出しが、選んで出した物か、カーソルを合わせて出た物か。
    合わせて出た物だけ、離れたときに引っ込める */
 let hoverSource = false;
-/* カーソルで出している語の居場所。同梱のPDFビューアが、右クリックで
-   その語に線を引くために尋ねてくる */
-let hoverRange = null;
 let hoverTimer = null;
 let hoverLeaveTimer = null;
 let hoverPoint = null;
@@ -472,7 +469,6 @@ function hide() {
   shownWord = "";
   translation = "";
   hoverSource = false;
-  hoverRange = null;
   clearHoverTimers();
   hoverPoint = null;
   if (ui) ui.bubble.hidden = true;
@@ -583,7 +579,6 @@ function onDwell(point) {
   if (hoverSource && found.word === shownText && ui && !ui.bubble.hidden) return;
 
   hoverSource = true;
-  hoverRange = found.range;
   anchor = {
     text: found.word,
     rectOf: () => found.range.getBoundingClientRect(),
@@ -596,11 +591,6 @@ function onDwell(point) {
   startTranslate(found.word);
 }
 
-/* 同梱のPDFビューアから「いまカーソルで出している語はどこか」を尋ねられる。
-   ビューアの中では、これとビューアが同じ所で動いているので Range をそのまま
-   渡せる。普通のページでは別の所で動くが、そこにはビューアが居ないので
-   尋ねられることもない。
-   これが唯一の繋ぎ目なので、消すなら向こうの右クリックも一緒に外すこと */
 /* 同梱のPDFビューアから「ここにこの訳を出して」と頼まれる。線を引いたところへ
    カーソルが触れたときに使う。訳はもう分かっているので、訳す相手は呼ばない。
    出した吹き出しは、カーソルで出した物と同じ扱いにする（離れれば引っ込む） */
@@ -615,7 +605,6 @@ document.addEventListener("engoloyd-show", (event) => {
 
   seq += 1;
   hoverSource = true;
-  hoverRange = null;
   /* 線を引いたところへカーソルが来ている間は、こちらの待ち時間は動かさない。
      待ってから出し直されると、出ている訳が一度消えて瞬く */
   clearHoverTimers();
@@ -642,25 +631,6 @@ document.addEventListener("engoloyd-show", (event) => {
    線から離れた瞬間に消すため。選んで出した吹き出しには手を出さない */
 document.addEventListener("engoloyd-hide", () => {
   if (hoverSource) hide();
-});
-
-document.addEventListener("engoloyd-hover-word", (event) => {
-  const detail = event.detail;
-  if (!detail || !hoverSource) return;
-  if (!ui || ui.bubble.hidden) return;
-  if (hoverRange) {
-    detail.word = shownWord;
-    detail.range = hoverRange;
-    return;
-  }
-  /* 範囲を持っていないことがある（線の訳を出しているときなど）。
-     位置を渡されていれば、カーソルの下の語を見直して拾う。
-     こうしないと、すでに線のあるところに乗った語を引けなくなる */
-  if (!Number.isFinite(detail.x) || !Number.isFinite(detail.y)) return;
-  const found = wordAtPoint(detail.x, detail.y);
-  if (!found) return;
-  detail.word = found.word;
-  detail.range = found.range;
 });
 
 /* ------------------------------------------------------------------ *
@@ -695,7 +665,6 @@ function handleSelection(target) {
   translation = "";
   showSettingsFlag = false;
   hoverSource = false;
-  hoverRange = null;
   clearHoverTimers();
 
   if (text.length > MAX_CHARS) {
